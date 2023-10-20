@@ -23,6 +23,7 @@ import java.util.List;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
+import org.joda.time.LocalTime;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
 import org.killbill.billing.account.api.Account;
@@ -48,6 +49,7 @@ public class TestTimeAwareContext extends UtilTestSuiteNoDB {
     private final String effectiveDateTime1 = "2012-01-20T07:30:42.000Z";
     private final String effectiveDateTime2 = "2012-01-20T08:00:00.000Z";
     private final String effectiveDateTime3 = "2012-01-20T08:45:33.000Z";
+
     private final String effectiveDateTimeA = "2012-01-20T16:30:42.000Z";
     private final String effectiveDateTimeB = "2012-01-20T16:00:00.000Z";
     private final String effectiveDateTimeC = "2012-01-20T15:30:42.000Z";
@@ -196,4 +198,126 @@ public class TestTimeAwareContext extends UtilTestSuiteNoDB {
         internalCallContext.setFixedOffsetTimeZone(AccountDateTimeUtils.getFixedOffsetTimeZone(account));
         internalCallContext.setReferenceTime(account.getReferenceTime());
     }
+
+    @Test(groups = "fast")
+    public void testComputeUTCDateTimeFromLocalDateAndViceVersaUTCTimezone() {
+
+        final DateTime referenceTime = new DateTime("2023-01-01T3:00:00.000Z");
+        final DateTimeZone timeZone = DateTimeZone.UTC;
+        refreshCallContext(referenceTime, timeZone);
+        LocalTime referenceLocalTime = internalCallContext.getReferenceLocalTime();
+        assertEquals(referenceLocalTime, new LocalTime("3:00:00.000"));
+
+        LocalDate inputDate = new LocalDate("2023-07-28");
+        DateTime utcDateTime = internalCallContext.toUTCDateTime(inputDate);
+        assertEquals(utcDateTime.compareTo(new DateTime("2023-07-28T3:00")), 0);
+
+        DateTime inputDateTime = new DateTime("2023-04-03T8:00Z");
+        LocalDate localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-04-03")), 0);
+    }
+
+    @Test(groups = "fast")
+    public void testComputeUTCDateTimeFromLocalDateAndViceVersaPSTTimezone() {
+
+        //without DST
+        DateTime referenceTime = new DateTime("2023-01-01T9:00:00.000"); //reference time in UTC
+        DateTimeZone timeZone = DateTimeZone.forID("America/Los_Angeles");
+        refreshCallContext(referenceTime, timeZone);
+
+        LocalTime referenceLocalTime = internalCallContext.getReferenceLocalTime(); //local time in America/Los_Angeles TZ
+        assertEquals(referenceLocalTime, new LocalTime("1:00:00.000"));
+
+        DateTimeZone fixedOffsetTimezone = internalCallContext.getFixedOffsetTimeZone(); //fixed offset from UTC
+        assertEquals(fixedOffsetTimezone, DateTimeZone.forOffsetHours(-8));
+
+        LocalDate inputDate = new LocalDate("2023-07-28");
+        DateTime utcDateTime = internalCallContext.toUTCDateTime(inputDate);
+        assertEquals(utcDateTime.compareTo(new DateTime("2023-07-28T9:00")), 0);
+
+        DateTime inputDateTime = new DateTime("2023-07-28T9:00Z");
+        LocalDate localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-07-28")), 0);
+
+        inputDateTime = new DateTime("2023-07-28T7:00Z");
+        localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-07-27")), 0);
+
+        //with DST
+        referenceTime = new DateTime("2023-04-01T9:00:00.000");//reference time in UTC
+        timeZone = DateTimeZone.forID("America/Los_Angeles");
+        refreshCallContext(referenceTime, timeZone);
+
+        referenceLocalTime = internalCallContext.getReferenceLocalTime();//local time in America/Los_Angeles TZ
+        assertEquals(referenceLocalTime, new LocalTime("2:00:00.000"));
+
+        fixedOffsetTimezone = internalCallContext.getFixedOffsetTimeZone(); //fixed offset from UTC
+        assertEquals(fixedOffsetTimezone, DateTimeZone.forOffsetHours(-7));
+
+        inputDate = new LocalDate("2023-07-28");
+        utcDateTime = internalCallContext.toUTCDateTime(inputDate);
+        assertEquals(utcDateTime.compareTo(new DateTime("2023-07-28T9:00")), 0);
+
+        inputDateTime = new DateTime("2023-07-28T9:00Z");
+        localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-07-28")), 0);
+
+        inputDateTime = new DateTime("2023-07-28T6:00Z");
+        localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-07-27")), 0);
+    }
+
+    @Test(groups = "fast")
+    public void testComputeUTCDateTimeFromLocalDateAndViceVersaNewYorkTimezone() {
+        //without DST
+        DateTime referenceTime = new DateTime("2019-03-04T06:00:00Z"); //reference time in UTC
+        DateTimeZone timeZone = DateTimeZone.forID("America/New_York");
+        refreshCallContext(referenceTime, timeZone);
+
+        LocalTime referenceLocalTime = internalCallContext.getReferenceLocalTime(); //local time in America/New_York TZ
+        assertEquals(referenceLocalTime, new LocalTime("1:00:00.000"));
+
+        DateTimeZone fixedOffsetTimezone = internalCallContext.getFixedOffsetTimeZone(); //fixed offset from UTC
+        assertEquals(fixedOffsetTimezone, DateTimeZone.forOffsetHours(-5));
+
+        //date to datetime
+        LocalDate inputDate = new LocalDate("2023-07-28");
+        DateTime utcDateTime = internalCallContext.toUTCDateTime(inputDate);
+        assertEquals(utcDateTime.compareTo(new DateTime("2023-07-28T6:00")), 0);
+
+        //datetime to date
+        DateTime inputDateTime = new DateTime("2023-07-28T8:00Z");
+        LocalDate localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-07-28")), 0);
+
+        inputDateTime = new DateTime("2023-07-28T4:00Z");
+        localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-07-27")), 0);
+
+        //with DST
+        referenceTime = new DateTime("2019-03-11T06:00:00Z");
+        timeZone = DateTimeZone.forID("America/New_York");
+        refreshCallContext(referenceTime, timeZone);
+
+        referenceLocalTime = internalCallContext.getReferenceLocalTime(); //local time in America/New_York TZ
+        assertEquals(referenceLocalTime, new LocalTime("2:00:00.000"));
+
+        fixedOffsetTimezone = internalCallContext.getFixedOffsetTimeZone(); //fixed offset from UTC
+        assertEquals(fixedOffsetTimezone, DateTimeZone.forOffsetHours(-4));
+
+        //date to datetime
+        inputDate = new LocalDate("2023-07-28");
+        utcDateTime = internalCallContext.toUTCDateTime(inputDate);
+        assertEquals(utcDateTime.compareTo(new DateTime("2023-07-28T6:00")), 0);
+
+        //datetime to date
+        inputDateTime = new DateTime("2023-07-28T8:00Z");
+        localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-07-28")), 0);
+
+        inputDateTime = new DateTime("2023-07-28T3:00Z");
+        localDateInUsersTimezone = internalCallContext.toLocalDate(inputDateTime);
+        assertEquals(localDateInUsersTimezone.compareTo(new LocalDate("2023-07-27")), 0);
+    }
+
 }
