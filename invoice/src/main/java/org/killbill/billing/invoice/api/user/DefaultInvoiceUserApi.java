@@ -127,6 +127,8 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
         this.catalogInternalApi = catalogInternalApi;
         this.internalCallContextFactory = internalCallContextFactory;
         this.eventBus = eventBus;
+
+        log.info("Reshma123 DefaultInvoiceUserApi created");
     }
 
     private static List<InvoiceItem> negateCreditItems(final List<InvoiceItem> input) {

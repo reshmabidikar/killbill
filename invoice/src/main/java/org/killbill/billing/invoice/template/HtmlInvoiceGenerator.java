@@ -44,6 +44,9 @@ import org.killbill.billing.util.email.templates.TemplateEngine;
 import org.killbill.billing.util.template.translation.TranslatorConfig;
 import org.killbill.commons.utils.io.IOUtils;
 import org.killbill.xmlloader.UriAccessor;
+import org.osgi.util.tracker.ServiceTracker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HtmlInvoiceGenerator {
 
@@ -54,19 +57,24 @@ public class HtmlInvoiceGenerator {
     private final TenantInternalApi tenantApi;
     private final ResourceBundleFactory bundleFactory;
 
+    private static final Logger log = LoggerFactory.getLogger(HtmlInvoiceGenerator.class);
+
     @Inject
     public HtmlInvoiceGenerator(final InvoiceFormatterFactory factory,
                                 final TemplateEngine templateEngine,
                                 final TranslatorConfig config,
                                 final CurrencyConversionApi currencyConversionApi,
                                 final ResourceBundleFactory bundleFactory,
-                                final TenantInternalApi tenantInternalApi) {
-        this.factory = factory;
+                                final TenantInternalApi tenantInternalApi,
+                                final ServiceTracker<InvoiceFormatterFactory, InvoiceFormatterFactory> invoiceFormatterTracker) {
+        //this.factory = factory;
+        this.factory = invoiceFormatterTracker != null ? invoiceFormatterTracker.getService() : factory;
         this.config = config;
         this.currencyConversionApi = currencyConversionApi;
         this.templateEngine = templateEngine;
         this.bundleFactory = bundleFactory;
         this.tenantApi = tenantInternalApi;
+        log.info("Reshma123 HtmlInvoiceGenerator created");
     }
 
     public HtmlInvoice generateInvoice(final Account account, @Nullable final Invoice invoice, final boolean manualPay, final InternalTenantContext context) throws IOException {

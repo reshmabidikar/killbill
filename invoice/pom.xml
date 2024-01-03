@@ -82,6 +82,11 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
+            <groupId>org.apache.felix</groupId>
+            <artifactId>org.apache.felix.framework</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
@@ -257,5 +262,6 @@
             <groupId>org.xerial.snappy</groupId>
             <artifactId>snappy-java</artifactId>
         </dependency>
+
     </dependencies>
 </project>

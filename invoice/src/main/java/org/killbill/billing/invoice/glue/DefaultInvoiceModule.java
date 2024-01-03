@@ -58,11 +58,17 @@ import org.killbill.billing.util.config.definition.InvoiceConfig;
 import org.killbill.billing.util.glue.KillBillModule;
 import org.killbill.billing.util.template.translation.TranslatorConfig;
 import org.skife.config.ConfigurationObjectFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.inject.TypeLiteral;
 import com.google.inject.name.Names;
 
+
+
 public class DefaultInvoiceModule extends KillBillModule implements InvoiceModule {
+
+    private static final Logger log = LoggerFactory.getLogger(DefaultInvoiceModule.class);
 
 
     public DefaultInvoiceModule(final KillbillConfigSource configSource) {
@@ -77,6 +83,7 @@ public class DefaultInvoiceModule extends KillBillModule implements InvoiceModul
 
     @Override
     public void installInvoiceUserApi() {
+        log.info("Reshma123 installInvoiceUserApi");
         bind(InvoiceUserApi.class).to(DefaultInvoiceUserApi.class).asEagerSingleton();
     }
 

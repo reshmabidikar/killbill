@@ -108,7 +108,7 @@ public class DefaultInvoiceItemFormatter implements InvoiceItemFormatter {
 
     @Override
     public String getFormattedEndDate() {
-        return item.getEndDate() == null ? null : item.getEndDate().toString(dateFormatter);
+        return item.getEndDate() == null ? null : item.getEndDate().minusDays(1).toString(dateFormatter);
     }
 
     @Override
