@@ -45,6 +45,7 @@ import org.killbill.billing.invoice.model.DefaultInvoicePayment;
 import org.killbill.billing.invoice.model.FixedPriceInvoiceItem;
 import org.killbill.billing.invoice.model.RepairAdjInvoiceItem;
 import org.killbill.billing.invoice.template.translator.DefaultInvoiceTranslator;
+import org.killbill.billing.util.LocaleUtils;
 import org.killbill.billing.util.email.templates.MustacheTemplateEngine;
 import org.killbill.billing.util.template.translation.TranslatorConfig;
 import org.skife.config.ConfigurationObjectFactory;
@@ -94,7 +95,9 @@ public class TestDefaultInvoiceFormatter extends InvoiceTestSuiteNoDB {
         Assert.assertEquals(invoice.getCreditedAmount().doubleValue(), 0.00);
 
         // Verify the merge
-        final InvoiceFormatter formatter = new DefaultInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, Locale.US, null, resourceBundleFactory, internalCallContext); //TODO_custom_invoice - check if correct
+        final ResourceBundle bundle = resourceBundleFactory.createBundle(Locale.US, config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
+        final ResourceBundle defaultBundle = resourceBundleFactory.createBundle(LocaleUtils.toLocale(config.getDefaultLocale()), config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
+        final InvoiceFormatter formatter = new DefaultInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, Locale.US, null, bundle, defaultBundle); //TODO_custom_invoice - check if correct
         final List<InvoiceItem> invoiceItems = formatter.getInvoiceItems();
         Assert.assertEquals(invoiceItems.size(), 1);
         Assert.assertEquals(invoiceItems.get(0).getInvoiceItemType(), InvoiceItemType.FIXED);
@@ -143,7 +146,9 @@ public class TestDefaultInvoiceFormatter extends InvoiceTestSuiteNoDB {
         Assert.assertEquals(invoice.getRefundedAmount().doubleValue(), -1.00);
 
         // Verify the merge
-        final InvoiceFormatter formatter = new DefaultInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, Locale.US, null, resourceBundleFactory, internalCallContext); //TODO_custom_invoice - check if correct
+        final ResourceBundle bundle = resourceBundleFactory.createBundle(Locale.US, config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
+        final ResourceBundle defaultBundle = resourceBundleFactory.createBundle(LocaleUtils.toLocale(config.getDefaultLocale()), config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
+        final InvoiceFormatter formatter = new DefaultInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, Locale.US, null, bundle, defaultBundle); //TODO_custom_invoice - check if correct
         final List<InvoiceItem> invoiceItems = formatter.getInvoiceItems();
         Assert.assertEquals(invoiceItems.size(), 4);
         Assert.assertEquals(invoiceItems.get(0).getInvoiceItemType(), InvoiceItemType.FIXED);
@@ -510,13 +515,15 @@ public class TestDefaultInvoiceFormatter extends InvoiceTestSuiteNoDB {
         final Map<String, Object> data = new HashMap<String, Object>();
 
         final String bundlePath = "org/killbill/billing/util/template/translation/InvoiceTranslation";
-        final ResourceBundle bundle = resourceBundleFactory.createBundle(Locale.US, bundlePath, ResourceBundleType.INVOICE_TRANSLATION, internalCallContext);
+        final ResourceBundle translatorBundle = resourceBundleFactory.createBundle(Locale.US, bundlePath, ResourceBundleType.INVOICE_TRANSLATION, internalCallContext);
 
-        final DefaultInvoiceTranslator translator = new DefaultInvoiceTranslator(bundle, null);
+        final DefaultInvoiceTranslator translator = new DefaultInvoiceTranslator(translatorBundle, null);
 
         data.put("text", translator);
+        final ResourceBundle bundle = resourceBundleFactory.createBundle(Locale.US, config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
+        final ResourceBundle defaultBundle = resourceBundleFactory.createBundle(LocaleUtils.toLocale(config.getDefaultLocale()), config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
 
-        data.put("invoice", new DefaultInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, Locale.US, currencyConversionApi, resourceBundleFactory, internalCallContext)); //TODO_custom_invoice - check if correct
+        data.put("invoice", new DefaultInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, Locale.US, currencyConversionApi, bundle, defaultBundle)); //TODO_custom_invoice - check if correct
 
         final String formattedText = templateEngine.executeTemplateText(template, data);
 
@@ -525,7 +532,10 @@ public class TestDefaultInvoiceFormatter extends InvoiceTestSuiteNoDB {
 
     private void checkOutput(final Invoice invoice, final String template, final String expected, final Locale locale) {
         final Map<String, Object> data = new HashMap<String, Object>();
-        data.put("invoice", new DefaultInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, locale, null, resourceBundleFactory, internalCallContext)); //TODO_custom_invoice - check if correct
+        final ResourceBundle bundle = resourceBundleFactory.createBundle(locale, config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
+        final ResourceBundle defaultBundle = resourceBundleFactory.createBundle(LocaleUtils.toLocale(config.getDefaultLocale()), config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
+
+        data.put("invoice", new DefaultInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, locale, null, bundle, defaultBundle)); //TODO_custom_invoice - check if correct
 
         final String formattedText = templateEngine.executeTemplateText(template, data);
         Assert.assertEquals(formattedText, expected);
