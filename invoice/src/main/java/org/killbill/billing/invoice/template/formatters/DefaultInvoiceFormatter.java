@@ -50,8 +50,8 @@ import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory;
 import org.killbill.billing.invoice.model.CreditAdjInvoiceItem;
 import org.killbill.billing.invoice.model.CreditBalanceAdjInvoiceItem;
 import org.killbill.billing.invoice.model.DefaultInvoice;
-import org.killbill.commons.utils.Strings;
 import org.killbill.billing.util.template.translation.TranslatorConfig;
+import org.killbill.commons.utils.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,10 +70,17 @@ public class DefaultInvoiceFormatter implements InvoiceFormatter {
     private final InternalTenantContext context;
     private final ResourceBundleFactory bundleFactory;
 
-    public DefaultInvoiceFormatter(final TranslatorConfig config, final Invoice invoice, final Locale locale,
+    private final String defaultLocale;
+
+    private final String catalogBundlePath;
+
+    public DefaultInvoiceFormatter(final String defaultLocale,
+                                   final String catalogBundlePath, final Invoice invoice, final Locale locale,
                                    final CurrencyConversionApi currencyConversionApi, final ResourceBundleFactory bundleFactory,
                                    final InternalTenantContext context) {
-        this.config = config;
+        this.config = null;
+        this.defaultLocale = defaultLocale;
+        this.catalogBundlePath = catalogBundlePath;
         this.invoice = invoice;
         this.dateFormatter = DateTimeFormat.mediumDate().withLocale(locale);
         this.locale = locale;
@@ -115,7 +122,7 @@ public class DefaultInvoiceFormatter implements InvoiceFormatter {
 
         final List<InvoiceItem> formatters = new ArrayList<InvoiceItem>();
         for (final InvoiceItem item : invoiceItems) {
-            formatters.add(new DefaultInvoiceItemFormatter(config, item, dateFormatter, locale, context, bundleFactory));
+            formatters.add(new DefaultInvoiceItemFormatter(defaultLocale, catalogBundlePath, item, dateFormatter, locale, context, bundleFactory));
         }
         return formatters;
     }

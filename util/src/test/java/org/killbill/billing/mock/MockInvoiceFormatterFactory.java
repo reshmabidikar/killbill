@@ -29,7 +29,7 @@ import org.killbill.billing.util.template.translation.TranslatorConfig;
 public class MockInvoiceFormatterFactory implements InvoiceFormatterFactory {
 
     @Override
-    public InvoiceFormatter createInvoiceFormatter() {
+    public InvoiceFormatter createInvoiceFormatter(final String defaultLocale, final String catalogBundlePath, final Invoice invoice, final Locale locale, final CurrencyConversionApi currencyConversionApi) {
         return null;
     }
 }

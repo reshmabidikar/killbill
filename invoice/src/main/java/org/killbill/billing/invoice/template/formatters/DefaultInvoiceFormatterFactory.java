@@ -18,13 +18,10 @@ package org.killbill.billing.invoice.template.formatters;
 
 import java.util.Locale;
 
-import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.currency.api.CurrencyConversionApi;
 import org.killbill.billing.invoice.api.Invoice;
 import org.killbill.billing.invoice.api.formatters.InvoiceFormatter;
-import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory;
 import org.killbill.billing.invoice.plugin.api.InvoiceFormatterFactory;
-import org.killbill.billing.util.template.translation.TranslatorConfig;
 
 public class DefaultInvoiceFormatterFactory implements InvoiceFormatterFactory {
 
@@ -39,8 +36,8 @@ public class DefaultInvoiceFormatterFactory implements InvoiceFormatterFactory {
 
 
     @Override
-    public InvoiceFormatter createInvoiceFormatter() {
-        return null;
+    public InvoiceFormatter createInvoiceFormatter(final String defaultLocale, final String catalogBundlePath, final Invoice invoice, final Locale locale, final CurrencyConversionApi currencyConversionApi) {
+        return new DefaultInvoiceFormatter(defaultLocale, catalogBundlePath, invoice, locale, currencyConversionApi, null, null);
     }
 
 }
