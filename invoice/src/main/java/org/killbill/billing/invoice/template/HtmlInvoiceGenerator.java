@@ -32,9 +32,9 @@ import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.currency.api.CurrencyConversionApi;
 import org.killbill.billing.invoice.api.Invoice;
 import org.killbill.billing.invoice.api.formatters.InvoiceFormatter;
-import org.killbill.billing.invoice.api.formatters.InvoiceFormatterFactory;
 import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory;
 import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory.ResourceBundleType;
+import org.killbill.billing.invoice.plugin.api.InvoiceFormatterFactory;
 import org.killbill.billing.invoice.template.translator.DefaultInvoiceTranslator;
 import org.killbill.billing.osgi.api.OSGIServiceRegistration;
 import org.killbill.billing.tenant.api.TenantInternalApi;
@@ -95,7 +95,7 @@ public class HtmlInvoiceGenerator {
 
         final String invoiceFormatterFactoryPluginName = config.getInvoiceFormatterFactoryPluginName();
         final InvoiceFormatterFactory invoiceFormatterFactory = invoiceFormatterFactoryPluginName == null ? builtInInvoiceFormatterFactory :  invoiceFormatterFactoryPluginRegistry.getServiceForName(invoiceFormatterFactoryPluginName);
-        final InvoiceFormatter formattedInvoice = invoiceFormatterFactory.createInvoiceFormatter(config, invoice, locale, currencyConversionApi, bundleFactory, context);
+        final InvoiceFormatter formattedInvoice = invoiceFormatterFactory.createInvoiceFormatter();
         data.put("invoice", formattedInvoice);
 
         invoiceData.setSubject(invoiceTranslator.getInvoiceEmailSubject());
