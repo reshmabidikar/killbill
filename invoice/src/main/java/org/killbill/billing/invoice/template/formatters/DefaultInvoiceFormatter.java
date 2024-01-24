@@ -62,7 +62,6 @@ public class DefaultInvoiceFormatter implements InvoiceFormatter {
 
     private static final Logger logger = LoggerFactory.getLogger(DefaultInvoiceFormatter.class);
 
-    private final TranslatorConfig config;
     private final Invoice invoice;
     private final DateTimeFormatter dateFormatter;
     private final Locale locale;
@@ -78,7 +77,6 @@ public class DefaultInvoiceFormatter implements InvoiceFormatter {
                                    final String catalogBundlePath, final Invoice invoice, final Locale locale,
                                    final CurrencyConversionApi currencyConversionApi, final ResourceBundleFactory bundleFactory,
                                    final InternalTenantContext context) {
-        this.config = null;
         this.defaultLocale = defaultLocale;
         this.catalogBundlePath = catalogBundlePath;
         this.invoice = invoice;
@@ -377,10 +375,6 @@ public class DefaultInvoiceFormatter implements InvoiceFormatter {
 
     // Expose the fields for children classes. This is useful for further customization of the invoices
 
-    @SuppressWarnings("UnusedDeclaration")
-    protected TranslatorConfig getConfig() {
-        return config;
-    }
 
     @SuppressWarnings("UnusedDeclaration")
     protected DateTimeFormatter getDateFormatter() {
