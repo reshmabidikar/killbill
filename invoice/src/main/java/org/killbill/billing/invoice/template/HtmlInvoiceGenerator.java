@@ -32,9 +32,9 @@ import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.currency.api.CurrencyConversionApi;
 import org.killbill.billing.invoice.api.Invoice;
 import org.killbill.billing.invoice.api.formatters.InvoiceFormatter;
-import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory;
-import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory.ResourceBundleType;
 import org.killbill.billing.invoice.plugin.api.InvoiceFormatterFactory;
+import org.killbill.billing.invoice.plugin.api.ResourceBundleFactory;
+import org.killbill.billing.invoice.plugin.api.ResourceBundleFactory.ResourceBundleType;
 import org.killbill.billing.invoice.template.translator.DefaultInvoiceTranslator;
 import org.killbill.billing.osgi.api.OSGIServiceRegistration;
 import org.killbill.billing.tenant.api.TenantInternalApi;
@@ -86,8 +86,8 @@ public class HtmlInvoiceGenerator {
         final Map<String, Object> data = new HashMap<String, Object>();
 
         final ResourceBundle invoiceBundle = accountLocale != null ?
-                                             bundleFactory.createBundle(LocaleUtils.toLocale(accountLocale), config.getInvoiceTemplateBundlePath(), ResourceBundleType.INVOICE_TRANSLATION, context) : null;
-        final ResourceBundle defaultInvoiceBundle = bundleFactory.createBundle(Locale.getDefault(), config.getInvoiceTemplateBundlePath(), ResourceBundleType.INVOICE_TRANSLATION, context);
+                                             bundleFactory.createBundle(LocaleUtils.toLocale(accountLocale), config.getInvoiceTemplateBundlePath(), ResourceBundleType.INVOICE_TRANSLATION, null) : null;
+        final ResourceBundle defaultInvoiceBundle = bundleFactory.createBundle(Locale.getDefault(), config.getInvoiceTemplateBundlePath(), ResourceBundleType.INVOICE_TRANSLATION, null);
         final DefaultInvoiceTranslator invoiceTranslator = new DefaultInvoiceTranslator(invoiceBundle, defaultInvoiceBundle);
 
         data.put("text", invoiceTranslator);
@@ -95,8 +95,8 @@ public class HtmlInvoiceGenerator {
 
         final String invoiceFormatterFactoryPluginName = config.getInvoiceFormatterFactoryPluginName();
         final InvoiceFormatterFactory invoiceFormatterFactory = invoiceFormatterFactoryPluginName == null ? builtInInvoiceFormatterFactory : invoiceFormatterFactoryPluginRegistry.getServiceForName(invoiceFormatterFactoryPluginName);
-        final ResourceBundle bundle = bundleFactory.createBundle(locale, config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, context);
-        final ResourceBundle defaultBundle = bundleFactory.createBundle(LocaleUtils.toLocale(config.getDefaultLocale()), config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, context);
+        final ResourceBundle bundle = bundleFactory.createBundle(locale, config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, null);
+        final ResourceBundle defaultBundle = bundleFactory.createBundle(LocaleUtils.toLocale(config.getDefaultLocale()), config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, null);
 
         final InvoiceFormatter formattedInvoice = invoiceFormatterFactory.createInvoiceFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoice, locale, currencyConversionApi, bundle, defaultBundle);
         data.put("invoice", formattedInvoice);

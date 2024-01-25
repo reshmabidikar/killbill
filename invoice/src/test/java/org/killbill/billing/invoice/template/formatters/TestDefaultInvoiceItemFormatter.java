@@ -30,10 +30,10 @@ import org.joda.time.format.DateTimeFormat;
 import org.killbill.billing.catalog.api.Currency;
 import org.killbill.billing.invoice.InvoiceTestSuiteNoDB;
 import org.killbill.billing.invoice.api.InvoiceItem;
-import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory.ResourceBundleType;
 import org.killbill.billing.invoice.model.FixedPriceInvoiceItem;
 import org.killbill.billing.invoice.model.ParentInvoiceItem;
 import org.killbill.billing.invoice.model.RecurringInvoiceItem;
+import org.killbill.billing.invoice.plugin.api.ResourceBundleFactory.ResourceBundleType;
 import org.killbill.billing.util.LocaleUtils;
 import org.killbill.billing.util.email.templates.MustacheTemplateEngine;
 import org.killbill.billing.util.template.translation.TranslatorConfig;
@@ -128,9 +128,9 @@ public class TestDefaultInvoiceItemFormatter extends InvoiceTestSuiteNoDB {
 
     private void checkOutput(final InvoiceItem invoiceItem, final String template, final String expected, final Locale locale) {
         final Map<String, Object> data = new HashMap<String, Object>();
-        final ResourceBundle bundle = resourceBundleFactory.createBundle(locale, config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
-        final ResourceBundle defaultBundle = resourceBundleFactory.createBundle(LocaleUtils.toLocale(config.getDefaultLocale()), config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, internalCallContext);
-        data.put("invoiceItem", new DefaultInvoiceItemFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoiceItem,  DateTimeFormat.mediumDate().withLocale(locale), locale, bundle, defaultBundle)); //TODO_custom_invoice - check if correct
+        final ResourceBundle bundle = resourceBundleFactory.createBundle(locale, config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, null);
+        final ResourceBundle defaultBundle = resourceBundleFactory.createBundle(LocaleUtils.toLocale(config.getDefaultLocale()), config.getCatalogBundlePath(), ResourceBundleType.CATALOG_TRANSLATION, null);
+        data.put("invoiceItem", new DefaultInvoiceItemFormatter(config.getDefaultLocale(), config.getCatalogBundlePath(), invoiceItem, DateTimeFormat.mediumDate().withLocale(locale), locale, bundle, defaultBundle)); //TODO_custom_invoice - check if correct
 
         final String formattedText = templateEngine.executeTemplateText(template, data);
         Assert.assertEquals(formattedText, expected);

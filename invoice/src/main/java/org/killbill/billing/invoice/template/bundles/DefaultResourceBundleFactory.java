@@ -17,11 +17,9 @@
 
 package org.killbill.billing.invoice.template.bundles;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.PropertyResourceBundle;
@@ -30,9 +28,9 @@ import java.util.ResourceBundle;
 import javax.inject.Inject;
 
 import org.killbill.billing.callcontext.InternalTenantContext;
-import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory;
+import org.killbill.billing.invoice.plugin.api.InvoiceContext;
+import org.killbill.billing.invoice.plugin.api.ResourceBundleFactory;
 import org.killbill.billing.tenant.api.TenantInternalApi;
-import org.killbill.billing.util.callcontext.InternalCallContextFactory;
 import org.killbill.xmlloader.UriAccessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,21 +46,38 @@ public class DefaultResourceBundleFactory implements ResourceBundleFactory {
         this.tenantApi = tenantApi;
     }
 
-    @Override
-    public ResourceBundle createBundle(final Locale locale, final String bundlePath, final ResourceBundleType type, final InternalTenantContext tenantContext) {
-        if (InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID.equals(tenantContext.getTenantRecordId())) {
-            return getGlobalBundle(locale, bundlePath);
-        }
-        final String bundle = getTenantBundleForType(locale, type, tenantContext);
-        if (bundle != null) {
-            try {
-                return new PropertyResourceBundle(new ByteArrayInputStream(bundle.getBytes(StandardCharsets.UTF_8)));
-            } catch (IOException e) {
-                logger.warn("Failed to de-serialize the property bundle for tenant {} and locale {}", tenantContext.getTenantRecordId(), locale);
-                // Fall through...
-            }
-        }
-        return getGlobalBundle(locale, bundlePath);
+    //    @Override
+    //    public ResourceBundle createBundle(final Locale locale, final String bundlePath, final ResourceBundleType type, final InternalTenantContext tenantContext) {
+    //        if (InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID.equals(tenantContext.getTenantRecordId())) {
+    //            return getGlobalBundle(locale, bundlePath);
+    //        }
+    //        final String bundle = getTenantBundleForType(locale, type, tenantContext);
+    //        if (bundle != null) {
+    //            try {
+    //                return new PropertyResourceBundle(new ByteArrayInputStream(bundle.getBytes(StandardCharsets.UTF_8)));
+    //            } catch (IOException e) {
+    //                logger.warn("Failed to de-serialize the property bundle for tenant {} and locale {}", tenantContext.getTenantRecordId(), locale);
+    //                // Fall through...
+    //            }
+    //        }
+    //        return getGlobalBundle(locale, bundlePath);
+    //    }
+
+    public ResourceBundle createBundle(final Locale locale, final String bundlePath, final ResourceBundleType type, final InvoiceContext invoiceContext) {
+        //        if (InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID.equals(tenantContext.getTenantRecordId())) {
+        //            return getGlobalBundle(locale, bundlePath);
+        //        }
+        //        final String bundle = getTenantBundleForType(locale, type, tenantContext);
+        //        if (bundle != null) {
+        //            try {
+        //                return new PropertyResourceBundle(new ByteArrayInputStream(bundle.getBytes(StandardCharsets.UTF_8)));
+        //            } catch (IOException e) {
+        //                logger.warn("Failed to de-serialize the property bundle for tenant {} and locale {}", tenantContext.getTenantRecordId(), locale);
+        //                // Fall through...
+        //            }
+        //        }
+        //        return getGlobalBundle(locale, bundlePath);
+        return null;
     }
 
     private String getTenantBundleForType(final Locale locale, final ResourceBundleType type, final InternalTenantContext tenantContext) {
