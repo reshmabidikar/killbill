@@ -89,7 +89,7 @@ public class TestInArrearUsagePST extends TestIntegrationBase {
 
     @Test(groups = "slow")
     public void testInArrearUsageCreateCancelUTC() throws Exception {
-        DateTime today = new DateTime(2024, 2, 21, 6, 00); //2024-02-16T6:00 UTC=2024-02-15T10:30 PST (different days)
+        final DateTime today = new DateTime(2024, 2, 21, 6, 00); //2024-02-16T6:00 UTC=2024-02-15T10:30 PST (different days)
         clock.setTime(today);
 
         final AccountData accountData = getAccountData(21);
@@ -145,11 +145,11 @@ public class TestInArrearUsagePST extends TestIntegrationBase {
     }
 
     @Test(groups = "slow")
-    public void testInArrearUsageCreateCancelPST() throws Exception { //PST and UTC on different days
-        DateTime today = new DateTime(2024, 2, 21, 6, 00); //2024-02-16T6:00 UTC=2024-02-15T10:30 PST (different days)
+    public void testInArrearUsageCreateCancelPST1() throws Exception { //PST and UTC on different days does not work as expected
+        final DateTime today = new DateTime(2024, 2, 21, 6, 00); //2024-02-21T6:00 UTC=2024-02-20T10:30 PST (different days)
         clock.setTime(today);
 
-        DateTime referenceTime = new DateTime(2024, 2, 20, 9, 0);
+        final DateTime referenceTime = new DateTime(2024, 2, 20, 9, 0);
         final AccountData accountData = getAccountData(20, DateTimeZone.forID("America/Los_Angeles"), referenceTime);
         final Account account = createAccountWithNonOsgiPaymentMethod(accountData);
         accountChecker.checkAccount(account.getId(), accountData, callContext);
@@ -209,4 +209,61 @@ public class TestInArrearUsagePST extends TestIntegrationBase {
         clock.addMonths(1);
         assertListenerStatus();
     }
+
+    @Test(groups = "slow")
+    public void testInArrearUsageCreateCancelPST2() throws Exception { //PST and UTC on same day - works as expected
+        final DateTime today = new DateTime(2024, 2, 21, 10, 00);  //2024-02-21T10:00 UTC=2024-02-21T02:00 PST (Same day)
+        clock.setTime(today);
+
+        final DateTime referenceTime = new DateTime(2024, 2, 21, 9, 0);
+        final AccountData accountData = getAccountData(21, DateTimeZone.forID("America/Los_Angeles"), referenceTime);
+        final Account account = createAccountWithNonOsgiPaymentMethod(accountData);
+        accountChecker.checkAccount(account.getId(), accountData, callContext);
+
+        final PlanPhaseSpecifier baseSpec = new PlanPhaseSpecifier("pistol-in-arrear-monthly-notrial");
+        final PlanPhaseSpecifier addOnSpec = new PlanPhaseSpecifier("bullets-usage-in-arrear");
+
+        final List<EntitlementSpecifier> specifierList = List.of(new DefaultEntitlementSpecifier(baseSpec), new DefaultEntitlementSpecifier(addOnSpec));
+        final BaseEntitlementWithAddOnsSpecifier cartSpecifier = new DefaultBaseEntitlementWithAddOnsSpecifier(null, "key1", specifierList, null, null, false);
+        final List<BaseEntitlementWithAddOnsSpecifier> entitlementWithAddOnsSpecifierList = List.of(cartSpecifier);
+
+        //create subscription at 10:05
+        clock.setTime(today.plusMinutes(5));
+        busHandler.pushExpectedEvents(NextEvent.CREATE, NextEvent.BLOCK,
+                                      NextEvent.CREATE, NextEvent.BLOCK, NextEvent.NULL_INVOICE);
+        final List<UUID> allEntitlements = entitlementApi.createBaseEntitlementsWithAddOns(account.getId(), entitlementWithAddOnsSpecifierList, true, Collections.emptyList(), callContext);
+        assertListenerStatus();
+
+        final Entitlement baseEntitlement = entitlementApi.getEntitlementForId(allEntitlements.get(0), false, callContext);
+        final Entitlement addOnEntitlement = entitlementApi.getEntitlementForId(allEntitlements.get(1), false, callContext);
+
+        //Record usage at 10:30
+        clock.setTime(today.plusMinutes(30));
+        recordUsageData(addOnEntitlement.getId(), "t1", "bullets", clock.getUTCNow(), BigDecimal.valueOf(85L), callContext);
+
+        //cancel base at 10:40
+        clock.setTime(today.plusMinutes(40));
+        busHandler.pushExpectedEvents(NextEvent.BLOCK, NextEvent.BLOCK, NextEvent.CANCEL, NextEvent.CANCEL, NextEvent.INVOICE, NextEvent.PAYMENT, NextEvent.INVOICE_PAYMENT);
+        baseEntitlement.cancelEntitlementWithPolicy(EntitlementActionPolicy.IMMEDIATE, Collections.emptyList(), callContext);
+        assertListenerStatus();
+
+        //invoice corresponding to usage item
+        final Invoice curInvoice = invoiceChecker.checkInvoice(account.getId(), 1, callContext, new ExpectedInvoiceItemCheck(new LocalDate(2024, 2, 21), new LocalDate(2024, 2, 21), InvoiceItemType.USAGE, new BigDecimal("2.95")));
+        invoiceChecker.checkTrackingIds(curInvoice, Set.of("t1"), internalCallContext);
+
+        //Trigger invoice dry run for next month - no invoice
+        final LocalDate targetDate = new LocalDate(2024, 3, 21);
+        final DryRunArguments dryRunArgs = new TestDryRunArguments(DryRunType.TARGET_DATE);
+        try {
+            final Invoice invoice = invoiceUserApi.triggerDryRunInvoiceGeneration(account.getId(), targetDate, dryRunArgs, Collections.emptyList(), callContext);
+        } catch (final InvoiceApiException e) {
+            assertEquals(e.getCode(), ErrorCode.INVOICE_NOTHING_TO_DO.getCode());
+        }
+
+        //Move clock to 2024-03-21T10:40 - still no invoice
+        busHandler.pushExpectedEvents(NextEvent.NULL_INVOICE);
+        clock.addMonths(1);
+        assertListenerStatus();
+    }
+
 }
