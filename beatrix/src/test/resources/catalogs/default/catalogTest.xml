@@ -1436,6 +1436,69 @@
             <plansAllowedInBundle>-1</plansAllowedInBundle>
             <!-- arbitrary number of these (multipack) -->
         </plan>
+        <plan name="bullets-usage-in-arrear2" prettyName="Bullet Monthly Plan 2">
+            <product>Bullets</product>
+            <finalPhase type="EVERGREEN" prettyName="Bullet Monthly Plan Evergreen">
+                <duration>
+                    <unit>UNLIMITED</unit>
+                </duration>
+                <usages>
+                    <usage name="bullets-usage-in-arrear-usage2" prettyName="Bullet Usage In Arrear" billingMode="IN_ARREAR" usageType="CONSUMABLE">
+                        <billingPeriod>MONTHLY</billingPeriod>
+                        <tiers>
+                            <tier>
+                                <blocks>
+                                    <tieredBlock>
+                                        <unit>bullets</unit>
+                                        <size>100</size>
+                                        <prices>
+                                            <price>
+                                                <currency>USD</currency>
+                                                <value>3.95</value>
+                                            </price>
+                                            <price>
+                                                <currency>EUR</currency>
+                                                <value>2.95</value>
+                                            </price>
+                                            <price>
+                                                <currency>GBP</currency>
+                                                <value>1.95</value>
+                                            </price>
+                                        </prices>
+                                        <max>10</max>
+                                    </tieredBlock>
+                                </blocks>
+                            </tier>
+                            <tier>
+                                <blocks>
+                                    <tieredBlock>
+                                        <unit>bullets</unit>
+                                        <size>1000</size>
+                                        <prices>
+                                            <price>
+                                                <currency>USD</currency>
+                                                <value>6.95</value>
+                                            </price>
+                                            <price>
+                                                <currency>EUR</currency>
+                                                <value>5.95</value>
+                                            </price>
+                                            <price>
+                                                <currency>GBP</currency>
+                                                <value>4.95</value>
+                                            </price>
+                                        </prices>
+                                        <max>100</max>
+                                    </tieredBlock>
+                                </blocks>
+                            </tier>
+                        </tiers>
+                    </usage>
+                </usages>
+            </finalPhase>
+            <plansAllowedInBundle>-1</plansAllowedInBundle>
+            <!-- arbitrary number of these (multipack) -->
+        </plan>
         <plan name="slugs-usage-in-arrear" prettyName="Slug Monthly Plan">
             <product>Slugs</product>
             <finalPhase type="EVERGREEN" prettyName="Slug Monthly Plan Evergreen">
@@ -1603,6 +1666,7 @@
                 <plan>holster-monthly-regular</plan>
                 <plan>refurbish-maintenance</plan>
                 <plan>bullets-usage-in-arrear</plan>
+                <plan>bullets-usage-in-arrear2</plan>
                 <plan>slugs-usage-in-arrear</plan>
                 <plan>holster-monthly-special</plan>
                 <plan>training-usage-in-arrear</plan>
