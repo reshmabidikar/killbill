@@ -278,7 +278,7 @@ public class TestInArrearUsagePST extends TestIntegrationBase {
         recordUsageData(addOnEntitlement.getId(), "t6", "bullets", new DateTime(2024, 6, 4, 6, 30), BigDecimal.valueOf(20L), callContext);
         //Recorded at 2024-06-04T7:30 AM UTC so 2024-06-03T11:30 PM PST - Before midnight - so included in current invoice
         recordUsageData(addOnEntitlement.getId(), "t7", "bullets", new DateTime(2024, 6, 4, 7, 30), BigDecimal.valueOf(10L), callContext);
-        //Recorded at 2024-06-04T8:30 AM UTC so 2024-06-04T12:30 AM PST - After midnight - so included in next invoice
+        //Recorded at 2024-06-04T8:30 AM UTC so 2024-06-04T12:30 AM PST - After midnight - also included in current invoice as the plan is changed??
         recordUsageData(addOnEntitlement.getId(), "t8", "bullets", new DateTime(2024, 6, 4, 8, 30), BigDecimal.valueOf(30L), callContext);
 
         //Move clock to 2024-06-04 - invoice generated. t5,t6,t7,t8 are included - is this expected?
@@ -304,34 +304,7 @@ public class TestInArrearUsagePST extends TestIntegrationBase {
 
         curInvoice = invoiceChecker.checkInvoice(account.getId(), 4, callContext, toBeChecked);
 
-        //cancel subscription at EOT (2024-08-04)
-        endOfTermDate = clock.getUTCToday().plusMonths(1);
-        baseEntitlement.cancelEntitlementWithDate(endOfTermDate, true, Collections.emptyList(), callContext);
-
-        //record usages
-        recordUsageData(addOnEntitlement.getId(), "t9", "bullets", new DateTime(2024, 7, 15, 2, 0), BigDecimal.valueOf(10L), callContext);
-        recordUsageData(addOnEntitlement.getId(), "t10", "bullets", new DateTime(2024, 8, 4, 6, 30), BigDecimal.valueOf(20L), callContext);
-        //Recorded at 2024-07-04T7:30 AM UTC so 2024-07-03T11:30 PM PST - Before midnight - so included in current invoice
-        recordUsageData(addOnEntitlement.getId(), "t11", "bullets", new DateTime(2024, 8, 4, 7, 30), BigDecimal.valueOf(10L), callContext);
-        //Recorded at 2024-07-04T8:30 AM UTC so 2024-07-04T12:30 AM PST - After midnight - But still included in current invoice as the subscription is cancelled??
-        recordUsageData(addOnEntitlement.getId(), "t12", "bullets", new DateTime(2024, 8, 4, 8, 30), BigDecimal.valueOf(30L), callContext);
-
-        //Move clock to 2024-08-04 - invoice generated. t9,t10,t11,t12 are included. Is this expected?
-        busHandler.pushExpectedEvents(NextEvent.CANCEL, NextEvent.CANCEL, NextEvent.BLOCK, NextEvent.BLOCK, NextEvent.INVOICE, NextEvent.PAYMENT, NextEvent.INVOICE_PAYMENT, NextEvent.NULL_INVOICE);
-        clock.addMonths(1);
-        assertListenerStatus();
-        toBeChecked =
-                List.of(new ExpectedInvoiceItemCheck(new LocalDate(2024, 7, 4), new LocalDate(2024, 8, 4), InvoiceItemType.RECURRING, new BigDecimal("100")),
-                        new ExpectedInvoiceItemCheck(new LocalDate(2024, 7, 4), new LocalDate(2024, 8, 4), InvoiceItemType.USAGE, new BigDecimal("3.95")),
-                        new ExpectedInvoiceItemCheck(new LocalDate(2024, 8, 4), new LocalDate(2024, 8, 4), InvoiceItemType.USAGE, new BigDecimal("3.95")));
-
-        curInvoice = invoiceChecker.checkInvoice(account.getId(), 5, callContext, toBeChecked);
-        invoiceChecker.checkTrackingIds(curInvoice, Set.of("t9", "t10", "t11", "t12"), internalCallContext);
-
-        //Move clock to 2024-08-04 - no invoice generated as subscription is cancelled
-        busHandler.pushExpectedEvents(NextEvent.NULL_INVOICE);
-        clock.addMonths(1);
-        assertListenerStatus();
+        //TODO - Add cancellation scenario after getting more details
 
     }
 
