@@ -155,6 +155,192 @@ public class InvoiceApiHelper {
         }
     }
 
+    public List<InvoiceItem> dispatchToInvoicePluginsAndInsertItems(final UUID accountId,
+                                                                    final boolean isDryRun,
+                                                                    final WithAccountLock withAccountLock,
+                                                                    final LinkedList<PluginProperty> inputProperties,
+                                                                    final boolean insertItems,
+                                                                    final CallContext contextMaybeWithoutAccountId) throws InvoiceApiException {
+        // Invoked by User API call
+        final LocalDate targetDate = null;
+        final List<Invoice> existingInvoices = null;
+        final boolean isRescheduled = false;
+
+        final InternalCallContext internalCallContext = internalCallContextFactory.createInternalCallContext(accountId, contextMaybeWithoutAccountId);
+        final CallContext context = internalCallContextFactory.createCallContext(internalCallContext);
+
+        // Keep track of properties as they can be updated by plugins at each call
+        Iterable<PluginProperty> pluginProperties = inputProperties;
+
+        final PriorCallResult priorCallResult = invoicePluginDispatcher.priorCall(targetDate, existingInvoices, isDryRun, isRescheduled, context, pluginProperties, internalCallContext);
+        if (priorCallResult.getRescheduleDate() != null) {
+            throw new InvoiceApiException(ErrorCode.INVOICE_PLUGIN_API_ABORTED, "delayed scheduling is unsupported for API calls");
+        }
+
+        pluginProperties = priorCallResult.getPluginProperties();
+
+        boolean success = false;
+        GlobalLock lock = null;
+        Iterable<DefaultInvoice> invoicesForPlugins = null;
+        try {
+            lock = locker.lockWithNumberOfTries(LockerType.ACCNT_INV_PAY.toString(), accountId.toString(), invoiceConfig.getMaxGlobalLockRetries());
+
+            invoicesForPlugins = withAccountLock.prepareInvoices();
+
+            if (insertItems) {
+                final List<InvoiceModelDao> invoiceModelDaos = new LinkedList<InvoiceModelDao>();
+                for (final DefaultInvoice invoiceForPlugin : invoicesForPlugins) {
+
+                    // Call plugin(s)
+                    final AdditionalInvoiceItemsResult itemsResult = invoicePluginDispatcher.updateOriginalInvoiceWithPluginInvoiceItems(invoiceForPlugin, isDryRun, context, pluginProperties, targetDate, existingInvoices, isRescheduled, internalCallContext);
+                    // Could be a bit weird for a plugin to keep updating properties for each invoice
+                    pluginProperties = itemsResult.getPluginProperties();
+                    // Transformation to InvoiceModelDao
+                    final InvoiceModelDao invoiceModelDao = new InvoiceModelDao(invoiceForPlugin);
+                    final List<InvoiceItem> invoiceItems = invoiceForPlugin.getInvoiceItems();
+                    final List<InvoiceItemModelDao> invoiceItemModelDaos = toInvoiceItemModelDao(invoiceItems);
+                    invoiceModelDao.addInvoiceItems(invoiceItemModelDaos);
+
+                    // Keep track of modified invoices
+                    invoiceModelDaos.add(invoiceModelDao);
+                }
+
+                final List<Invoice> invoices = new LinkedList<>();
+                for (final Invoice invoice : invoicesForPlugins) {
+                    try {
+                        final Invoice invoiceFromDB = new DefaultInvoice(dao.getById(invoice.getId(), internalCallContext));
+                        if (invoiceFromDB != null) {
+                            invoices.add(invoiceFromDB);
+                        }
+                    } catch (final InvoiceApiException e) { //invoice not present in DB, do nothing
+                    }
+                }
+
+                final ExistingInvoiceMetadata existingInvoiceMetadata = new ExistingInvoiceMetadata(invoices);
+
+                final List<InvoiceItemModelDao> createdInvoiceItems = dao.createInvoices(invoiceModelDaos, null, Collections.emptySet(), null, existingInvoiceMetadata, true, internalCallContext);
+                success = true;
+
+                return fromInvoiceItemModelDao(createdInvoiceItems);
+            }
+            else {
+                success = true;
+                return Collections.emptyList();
+            }
+        } catch (final LockFailedException e) {
+            throw new InvoiceApiException(e, ErrorCode.UNEXPECTED_ERROR, "Failed to process invoice items: failed to acquire lock");
+        } finally {
+            if (lock != null) {
+                lock.release();
+            }
+
+            if (success) {
+                for (final Invoice invoiceForPlugin : invoicesForPlugins) {
+                    final DefaultInvoice refreshedInvoice = new DefaultInvoice(dao.getById(invoiceForPlugin.getId(), internalCallContext));
+                    invoicePluginDispatcher.onSuccessCall(targetDate, refreshedInvoice, existingInvoices, isDryRun, isRescheduled, context, pluginProperties, internalCallContext);
+                }
+            } else {
+                invoicePluginDispatcher.onFailureCall(targetDate, null, existingInvoices, isDryRun, isRescheduled, context, pluginProperties, internalCallContext);
+            }
+        }
+    }
+
+//    public List<InvoiceItem> dispatchToInvoicePluginsAndInsertItems(final UUID accountId,
+//                                                                    final boolean isDryRun,
+//                                                                    final WithAccountLock withAccountLock,
+//                                                                    final LinkedList<PluginProperty> inputProperties,
+//                                                                    final boolean insertItems,
+//                                                                    final CallContext contextMaybeWithoutAccountId) throws InvoiceApiException {
+//        // Invoked by User API call
+//        final LocalDate targetDate = null;
+//        final List<Invoice> existingInvoices = null;
+//        final boolean isRescheduled = false;
+//
+//        final InternalCallContext internalCallContext = internalCallContextFactory.createInternalCallContext(accountId, contextMaybeWithoutAccountId);
+//        final CallContext context = internalCallContextFactory.createCallContext(internalCallContext);
+//
+//        // Keep track of properties as they can be updated by plugins at each call
+//        Iterable<PluginProperty> pluginProperties = inputProperties;
+//
+//        final PriorCallResult priorCallResult = invoicePluginDispatcher.priorCall(targetDate, existingInvoices, isDryRun, isRescheduled, context, pluginProperties, internalCallContext);
+//        if (priorCallResult.getRescheduleDate() != null) {
+//            throw new InvoiceApiException(ErrorCode.INVOICE_PLUGIN_API_ABORTED, "delayed scheduling is unsupported for API calls");
+//        }
+//
+//        pluginProperties = priorCallResult.getPluginProperties();
+//
+//        boolean success = false;
+//        GlobalLock lock = null;
+//
+//        Iterable<DefaultInvoice> invoicesForPlugins = null;
+//        if (insertItems) {
+//
+//
+//            try {
+//                lock = locker.lockWithNumberOfTries(LockerType.ACCNT_INV_PAY.toString(), accountId.toString(), invoiceConfig.getMaxGlobalLockRetries());
+//
+//                invoicesForPlugins = withAccountLock.prepareInvoices();
+//
+//                final List<InvoiceModelDao> invoiceModelDaos = new LinkedList<InvoiceModelDao>();
+//
+//                for (final DefaultInvoice invoiceForPlugin : invoicesForPlugins) {
+//
+//                    // Call plugin(s)
+//                    final AdditionalInvoiceItemsResult itemsResult = invoicePluginDispatcher.updateOriginalInvoiceWithPluginInvoiceItems(invoiceForPlugin, isDryRun, context, pluginProperties, targetDate, existingInvoices, isRescheduled, internalCallContext);
+//                    // Could be a bit weird for a plugin to keep updating properties for each invoice
+//                    pluginProperties = itemsResult.getPluginProperties();
+//                    // Transformation to InvoiceModelDao
+//                    final InvoiceModelDao invoiceModelDao = new InvoiceModelDao(invoiceForPlugin);
+//                    final List<InvoiceItem> invoiceItems = invoiceForPlugin.getInvoiceItems();
+//                    final List<InvoiceItemModelDao> invoiceItemModelDaos = toInvoiceItemModelDao(invoiceItems);
+//                    invoiceModelDao.addInvoiceItems(invoiceItemModelDaos);
+//
+//                    // Keep track of modified invoices
+//                    invoiceModelDaos.add(invoiceModelDao);
+//                }
+//
+//                final List<Invoice> invoices = new LinkedList<>();
+//                for (final Invoice invoice : invoicesForPlugins) {
+//                    try {
+//                        final Invoice invoiceFromDB = new DefaultInvoice(dao.getById(invoice.getId(), internalCallContext));
+//                        if (invoiceFromDB != null) {
+//                            invoices.add(invoiceFromDB);
+//                        }
+//                    } catch (final InvoiceApiException e) { //invoice not present in DB, do nothing
+//                    }
+//                }
+//
+//                final ExistingInvoiceMetadata existingInvoiceMetadata = new ExistingInvoiceMetadata(invoices);
+//
+//                final List<InvoiceItemModelDao> createdInvoiceItems = dao.createInvoices(invoiceModelDaos, null, Collections.emptySet(), null, existingInvoiceMetadata, true, internalCallContext);
+//                success = true;
+//
+//                return fromInvoiceItemModelDao(createdInvoiceItems);
+//            } catch (final LockFailedException e) {
+//                throw new InvoiceApiException(e, ErrorCode.UNEXPECTED_ERROR, "Failed to process invoice items: failed to acquire lock");
+//            } finally {
+//                if (lock != null) {
+//                    lock.release();
+//                }
+//
+//            }
+//        }
+//
+//        else {
+//            if (success) {
+//                for (final Invoice invoiceForPlugin : invoicesForPlugins) {
+//                    final DefaultInvoice refreshedInvoice = new DefaultInvoice(dao.getById(invoiceForPlugin.getId(), internalCallContext));
+//                    invoicePluginDispatcher.onSuccessCall(targetDate, refreshedInvoice, existingInvoices, isDryRun, isRescheduled, context, pluginProperties, internalCallContext);
+//                }
+//            } else {
+//                invoicePluginDispatcher.onFailureCall(targetDate, null, existingInvoices, isDryRun, isRescheduled, context, pluginProperties, internalCallContext);
+//            }
+//
+//            return Collections.emptyList();
+//        }
+//    }
+
+
     /**
      * Create an adjustment for a given invoice item. This just creates the object in memory, it doesn't write it to disk.
      *

@@ -702,8 +702,17 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
         final LinkedList<PluginProperty> properties = new LinkedList<PluginProperty>();
         properties.add(new PluginProperty(INVOICE_OPERATION, "commit", false));
 
-        invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, context);
+        invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, false, context);
     }
+
+//    public void commitInvoice(final UUID invoiceId, final CallContext context) throws InvoiceApiException {
+//        final InternalCallContext internalCallContext = internalCallContextFactory.createInternalCallContext(invoiceId, ObjectType.INVOICE, context);
+//        // Update invoice status first prior we update CTD as we typically don't update CTD for non committed invoices.
+//        dao.changeInvoiceStatus(invoiceId, InvoiceStatus.COMMITTED, internalCallContext);
+//        final DefaultInvoice invoice = getInvoiceInternal(invoiceId, context);
+//        dispatcher.setChargedThroughDates(invoice, internalCallContext);
+//    }
+
 
     @Override
     public void transferChildCreditToParent(final UUID childAccountId, final CallContext context) throws InvoiceApiException {
@@ -794,7 +803,7 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
         final LinkedList<PluginProperty> properties = new LinkedList<PluginProperty>();
         properties.add(new PluginProperty(INVOICE_OPERATION, "void", false));
 
-        invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, context);
+        invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, false, context);
     }
 
     @Override
