@@ -513,6 +513,10 @@ public class TestIntegrationBase extends BeatrixTestSuiteWithEmbeddedDB implemen
     }
 
     protected AccountData getAccountData(@Nullable final Integer billingDay, final DateTimeZone tz) {
+        return getAccountData(billingDay, tz, clock.getUTCNow());
+    }
+
+    protected AccountData getAccountData(@Nullable final Integer billingDay, final DateTimeZone tz, final DateTime referenceTime) {
         final MockAccountBuilder builder = new MockAccountBuilder()
                 .name(UUID.randomUUID().toString().substring(1, 8))
                 .firstNameLength(6)
@@ -521,7 +525,7 @@ public class TestIntegrationBase extends BeatrixTestSuiteWithEmbeddedDB implemen
                 .migrated(false)
                 .externalKey(UUID.randomUUID().toString().substring(1, 8))
                 .currency(Currency.USD)
-                .referenceTime(clock.getUTCNow())
+                .referenceTime(referenceTime)
                 .timeZone(tz);
         if (billingDay != null) {
             builder.billingCycleDayLocal(billingDay);
