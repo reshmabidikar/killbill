@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<catalog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://docs.killbill.io/latest/catalog.xsd">
+    <effectiveDate>2024-04-11T00:00:00.000Z</effectiveDate>
+    <catalogName>ExampleCatalog</catalogName>
+    <recurringBillingMode>IN_ADVANCE</recurringBillingMode>
+    <currencies>
+        <currency>USD</currency>
+    </currencies>
+    <products>
+        <product name="Standard">
+            <category>BASE</category>
+        </product>
+    </products>
+    <rules>
+        <changePolicy>
+            <changePolicyCase>
+                <policy>END_OF_TERM</policy>
+            </changePolicyCase>
+        </changePolicy>
+        <cancelPolicy>
+            <cancelPolicyCase>
+                <policy>END_OF_TERM</policy>
+            </cancelPolicyCase>
+        </cancelPolicy>
+    </rules>
+    <plans>
+        <plan name="standard-monthly-fixedterm-1">
+            <product>Standard</product>
+            <initialPhases>
+            </initialPhases>
+            <finalPhase type="FIXEDTERM">
+                <duration>
+                    <unit>MONTHS</unit>
+                    <number>12</number>
+                </duration>
+                <recurring>
+                    <billingPeriod>MONTHLY</billingPeriod>
+                    <recurringPrice>
+                        <price>
+                            <currency>USD</currency>
+                            <value>27.06</value>
+                        </price>
+                    </recurringPrice>
+                </recurring>
+            </finalPhase>
+        </plan>
+  <plan name="standard-monthly-fixedterm-2">
+            <product>Standard</product>
+            <initialPhases>
+            </initialPhases>
+            <finalPhase type="FIXEDTERM">
+                <duration>
+                    <unit>MONTHS</unit>
+                    <number>12</number>
+                </duration>
+                <recurring>
+                    <billingPeriod>MONTHLY</billingPeriod>
+                    <recurringPrice>
+                        <price>
+                            <currency>USD</currency>
+                            <value>27.06</value>
+                        </price>
+                    </recurringPrice>
+                </recurring>
+            </finalPhase>
+        </plan>		
+        <plan name="standard-monthly-evergreen-1" prettyName="Standard Monthly Plan">
+            <product>Standard</product>
+            <initialPhases>
+            </initialPhases>
+            <finalPhase type="EVERGREEN" prettyName="Standard Monthly Plan Evergreen Phase">
+                <duration>
+                    <unit>UNLIMITED</unit>
+                </duration>
+                <recurring>
+                    <billingPeriod>MONTHLY</billingPeriod>
+                    <recurringPrice>
+                        <price>
+                            <currency>USD</currency>
+                            <value>42.22</value>
+                        </price>
+                    </recurringPrice>
+                </recurring>
+            </finalPhase>
+        </plan>
+   <plan name="standard-monthly-evergreen-2" prettyName="Standard Monthly Plan">
+            <product>Standard</product>
+            <initialPhases>
+            </initialPhases>
+            <finalPhase type="EVERGREEN" prettyName="Standard Monthly Plan Evergreen Phase">
+                <duration>
+                    <unit>UNLIMITED</unit>
+                </duration>
+                <recurring>
+                    <billingPeriod>MONTHLY</billingPeriod>
+                    <recurringPrice>
+                        <price>
+                            <currency>USD</currency>
+                            <value>37.89</value>
+                        </price>
+                    </recurringPrice>
+                </recurring>
+            </finalPhase>
+        </plan>		
+    </plans>
+    <priceLists>
+        <defaultPriceList name="DEFAULT">
+            <plans>
+                <plan>standard-monthly-fixedterm-1</plan>
+				<plan>standard-monthly-fixedterm-2</plan>
+				<plan>standard-monthly-evergreen-1</plan>
+				<plan>standard-monthly-evergreen-2</plan>
+            </plans>
+        </defaultPriceList>
+    </priceLists>
+</catalog>
