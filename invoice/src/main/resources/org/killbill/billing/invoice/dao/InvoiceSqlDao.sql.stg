@@ -108,12 +108,15 @@ FROM (
     SELECT
           ii.invoice_id
         , ii.tenant_record_id
-        , CASE WHEN inv.status in ('DRAFT', 'VOID') OR inv.migrated = true OR tg.tag_definition_id = '00000000-0000-0000-0000-000000000004' THEN 0 ELSE SUM(ii.amount) END as amount
+        , CASE WHEN inv.status in ('DRAFT', 'VOID') OR inv.migrated = true OR tg.tag_definition_id = '00000000-0000-0000-0000-000000000004' OR inv2.status in ('DRAFT', 'VOID') OR inv2.migrated = true THEN 0 ELSE SUM(ii.amount) END as amount
  FROM invoice_items ii
     JOIN invoices inv ON ii.invoice_id = inv.id
     LEFT OUTER JOIN tags tg ON ii.invoice_id = tg.object_id
+    LEFT OUTER JOIN invoice_parent_children ipc on ii.invoice_id = ipc.child_invoice_id
+    LEFT OUTER JOIN invoices inv2 on ipc.parent_invoice_id = inv2.id
     WHERE
         ii.type in ('TAX', 'EXTERNAL_CHARGE', 'FIXED', 'USAGE', 'RECURRING', 'ITEM_ADJ', 'REPAIR_ADJ', 'PARENT_SUMMARY', 'CBA_ADJ', 'CREDIT_ADJ')
+        and inv.parent_invoice = 0
         <AND_CHECK_TENANT("ii.")>
 
     GROUP BY
@@ -122,8 +125,45 @@ FROM (
         , inv.status
         , inv.migrated
         , tg.tag_definition_id
+        ,inv2.status
+        ,inv2.migrated
 
     UNION ALL
+
+    SELECT
+          i.id as invoice_id
+        , i.tenant_record_id
+        , 0 as amount
+    FROM invoices i
+    WHERE
+        <CHECK_TENANT("i.")>
+
+    UNION ALL
+
+    SELECT
+          ii.invoice_id
+        , ii.tenant_record_id
+        , CASE WHEN inv.status in ('DRAFT', 'VOID') OR inv.migrated = true OR tg.tag_definition_id = '00000000-0000-0000-0000-000000000004' OR inv2.status in ('DRAFT', 'VOID') OR inv2.migrated = true THEN 0 ELSE SUM(ii.amount) END as amount
+ FROM invoice_items ii
+    JOIN invoices inv ON ii.invoice_id = inv.id
+    LEFT OUTER JOIN tags tg ON ii.invoice_id = tg.object_id
+    LEFT OUTER JOIN invoice_parent_children ipc on ii.invoice_id = ipc.parent_invoice_id
+    LEFT OUTER JOIN invoices inv2 on ipc.parent_invoice_id = inv2.id
+    WHERE
+        ii.type in ('TAX', 'EXTERNAL_CHARGE', 'FIXED', 'USAGE', 'RECURRING', 'ITEM_ADJ', 'REPAIR_ADJ', 'PARENT_SUMMARY', 'CBA_ADJ', 'CREDIT_ADJ')
+        and inv.parent_invoice = 1
+        <AND_CHECK_TENANT("ii.")>
+
+    GROUP BY
+          ii.invoice_id
+        , ii.tenant_record_id
+        , inv.status
+        , inv.migrated
+        , tg.tag_definition_id
+        ,inv2.status
+        ,inv2.migrated
+
+     UNION ALL
 
     SELECT
           invoice_id
