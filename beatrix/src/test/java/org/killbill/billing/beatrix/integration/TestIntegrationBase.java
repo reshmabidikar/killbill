@@ -1255,6 +1255,8 @@ public class TestIntegrationBase extends BeatrixTestSuiteWithEmbeddedDB implemen
         private Period maxInvoiceLimit;
         private int maxRawUsagePreviousPeriod;
 
+        private AccountTzOffset accountTzOffset;
+
         public ConfigurableInvoiceConfig(final InvoiceConfig defaultInvoiceConfig) {
             this.defaultInvoiceConfig = defaultInvoiceConfig;
             reset();
@@ -1330,6 +1332,16 @@ public class TestIntegrationBase extends BeatrixTestSuiteWithEmbeddedDB implemen
             return defaultInvoiceConfig.getMaxInvoiceLimit(tenantContext);
         }
 
+        @Override
+        public int getProrationFixedDays() {
+            return defaultInvoiceConfig.getProrationFixedDays();
+        }
+
+        @Override
+        public int getProrationFixedDays(final InternalTenantContext tenantContext) {
+            return defaultInvoiceConfig.getProrationFixedDays(tenantContext);
+        }
+
         public void setMaxInvoiceLimit(final Period value) {
             this.maxInvoiceLimit = value;
         }
@@ -1399,6 +1411,16 @@ public class TestIntegrationBase extends BeatrixTestSuiteWithEmbeddedDB implemen
         }
 
         @Override
+        public AccountTzOffset getAccountTzOffsetMode() {
+            return accountTzOffset;
+        }
+
+        @Override
+        public AccountTzOffset getAccountTzOffsetMode(final InternalTenantContext tenantContext) {
+            return getAccountTzOffsetMode();
+        }
+
+        @Override
         public InArrearMode getInArrearMode() {
             return inArrearMode;
         }
@@ -1448,6 +1470,10 @@ public class TestIntegrationBase extends BeatrixTestSuiteWithEmbeddedDB implemen
             this.isZeroAmountUsageDisabled = isZeroAmountUsageDisabled;
         }
 
+        public void setAccountTzOffset(final AccountTzOffset accountTzOffset) {
+            this.accountTzOffset = accountTzOffset;
+        }
+
         public void reset() {
             isInvoicingSystemEnabled = defaultInvoiceConfig.isInvoicingSystemEnabled();
             shouldParkAccountsWithUnknownUsage = defaultInvoiceConfig.shouldParkAccountsWithUnknownUsage();
@@ -1456,6 +1482,7 @@ public class TestIntegrationBase extends BeatrixTestSuiteWithEmbeddedDB implemen
             inArrearMode = defaultInvoiceConfig.getInArrearMode();
             maxInvoiceLimit = defaultInvoiceConfig.getMaxInvoiceLimit();
             maxRawUsagePreviousPeriod = defaultInvoiceConfig.getMaxRawUsagePreviousPeriod();
+            accountTzOffset = defaultInvoiceConfig.getAccountTzOffsetMode();
         }
     }
 }

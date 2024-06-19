@@ -31,8 +31,6 @@ public class DefaultInvoiceProviderPluginRegistryProvider implements Provider<OS
 
     @Override
     public OSGIServiceRegistration<InvoicePluginApi> get() {
-        final DefaultInvoiceProviderPluginRegistry pluginRegistry = new DefaultInvoiceProviderPluginRegistry();
-
-        return pluginRegistry;
+        return new DefaultInvoiceProviderPluginRegistry();
     }
 }

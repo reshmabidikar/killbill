@@ -1,8 +1,8 @@
 /*
  * Copyright 2010-2014 Ning, Inc.
  * Copyright 2014-2020 Groupon, Inc
- * Copyright 2020-2021 Equinix, Inc
- * Copyright 2014-2021 The Billing Project, LLC
+ * Copyright 2020-2024 Equinix, Inc
+ * Copyright 2014-2024 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -29,10 +29,13 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
@@ -70,9 +73,7 @@ import org.killbill.billing.invoice.notification.NextBillingDatePoster;
 import org.killbill.billing.invoice.notification.ParentInvoiceCommitmentPoster;
 import org.killbill.billing.junction.BillingEventSet;
 import org.killbill.billing.tag.TagInternalApi;
-import org.killbill.commons.utils.Preconditions;
 import org.killbill.billing.util.UUIDs;
-import org.killbill.commons.utils.annotation.VisibleForTesting;
 import org.killbill.billing.util.api.AuditLevel;
 import org.killbill.billing.util.audit.AuditLogWithHistory;
 import org.killbill.billing.util.audit.dao.AuditDao;
@@ -80,7 +81,6 @@ import org.killbill.billing.util.cache.Cachable.CacheType;
 import org.killbill.billing.util.cache.CacheController;
 import org.killbill.billing.util.cache.CacheControllerDispatcher;
 import org.killbill.billing.util.callcontext.InternalCallContextFactory;
-import org.killbill.commons.utils.collect.Iterables;
 import org.killbill.billing.util.config.definition.InvoiceConfig;
 import org.killbill.billing.util.dao.NonEntityDao;
 import org.killbill.billing.util.dao.TableName;
@@ -91,16 +91,22 @@ import org.killbill.billing.util.entity.dao.EntityDaoBase;
 import org.killbill.billing.util.entity.dao.EntitySqlDaoTransactionWrapper;
 import org.killbill.billing.util.entity.dao.EntitySqlDaoTransactionalJdbiWrapper;
 import org.killbill.billing.util.entity.dao.EntitySqlDaoWrapperFactory;
+import org.killbill.billing.util.entity.dao.SearchQuery;
+import org.killbill.billing.util.entity.dao.SqlOperator;
 import org.killbill.billing.util.optimizer.BusOptimizer;
 import org.killbill.billing.util.tag.Tag;
 import org.killbill.bus.api.BusEvent;
 import org.killbill.bus.api.PersistentBus.EventBusException;
 import org.killbill.clock.Clock;
+import org.killbill.commons.utils.Preconditions;
+import org.killbill.commons.utils.annotation.VisibleForTesting;
+import org.killbill.commons.utils.collect.Iterables;
 import org.killbill.commons.utils.collect.Sets;
 import org.skife.jdbi.v2.IDBI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.killbill.billing.util.entity.dao.SearchQuery.SEARCH_QUERY_MARKER;
 import static org.killbill.billing.util.glue.IDBISetup.MAIN_RO_IDBI_NAMED;
 
 public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, InvoiceApiException> implements InvoiceDao {
@@ -117,6 +123,8 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                                                              InvoiceItemType.TAX,
                                                                                              InvoiceItemType.USAGE,
                                                                                              InvoiceItemType.PARENT_SUMMARY);
+
+    private static final Pattern BALANCE_QUERY_PATTERN = Pattern.compile(SEARCH_QUERY_MARKER + "balance\\[(?<comparator>eq|gte|gt|lte|lt|neq)\\]=(?<balance>\\w+)");
 
     private final NextBillingDatePoster nextBillingDatePoster;
     private final BusOptimizer eventBus;
@@ -180,7 +188,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                                             .collect(Collectors.toUnmodifiableList());
 
             if (includeInvoiceComponents) {
-                invoiceDaoHelper.populateChildren(invoices, invoicesTags, entitySqlDaoWrapperFactory, context);
+                invoiceDaoHelper.populateChildren(invoices, invoicesTags, false, entitySqlDaoWrapperFactory, context);
             }
 
             return invoices;
@@ -201,7 +209,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             final InvoiceSqlDao invoiceDao = entitySqlDaoWrapperFactory.become(InvoiceSqlDao.class);
             final List<InvoiceModelDao> invoices = getAllNonMigratedInvoicesByAccountAfterDate(includeVoidedInvoices, invoiceDao, fromDate, upToDate, context);
             if (includeInvoiceComponents) {
-                invoiceDaoHelper.populateChildren(invoices, invoicesTags, entitySqlDaoWrapperFactory, context);
+                invoiceDaoHelper.populateChildren(invoices, invoicesTags, false, entitySqlDaoWrapperFactory, context);
             }
 
             return invoices;
@@ -227,6 +235,11 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
 
     @Override
     public InvoiceModelDao getById(final UUID invoiceId, final InternalTenantContext context) throws InvoiceApiException {
+        return getById(invoiceId, false, context);
+    }
+
+    @Override
+    public InvoiceModelDao getById(final UUID invoiceId, final boolean includeRepairStatus, final InternalTenantContext context) throws InvoiceApiException {
         final List<Tag> invoicesTags = getInvoicesTags(context);
 
         return transactionalSqlDao.execute(true, InvoiceApiException.class, entitySqlDaoWrapperFactory -> {
@@ -236,13 +249,13 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             if (invoice == null) {
                 throw new InvoiceApiException(ErrorCode.INVOICE_NOT_FOUND, invoiceId);
             }
-            invoiceDaoHelper.populateChildren(invoice, invoicesTags, entitySqlDaoWrapperFactory, context);
+            invoiceDaoHelper.populateChildren(invoice, invoicesTags, includeRepairStatus, entitySqlDaoWrapperFactory, context);
             return invoice;
         });
     }
 
     @Override
-    public InvoiceModelDao getByNumber(final Integer number, final InternalTenantContext context) throws InvoiceApiException {
+    public InvoiceModelDao getByNumber(final Integer number, final Boolean includeInvoiceChildren, final InternalTenantContext context) throws InvoiceApiException {
         if (number == null) {
             throw new InvoiceApiException(ErrorCode.INVOICE_INVALID_NUMBER, "(null)");
         }
@@ -257,11 +270,12 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                 throw new InvoiceApiException(ErrorCode.INVOICE_NUMBER_NOT_FOUND, number.longValue());
             }
 
-            // The context may not contain the account record id at this point - we couldn't do it in the API above
-            // as we couldn't get access to the invoice object until now.
-            final InternalTenantContext contextWithAccountRecordId = internalCallContextFactory.createInternalTenantContext(invoice.getAccountId(), context);
-            invoiceDaoHelper.populateChildren(invoice, invoicesTags, entitySqlDaoWrapperFactory, contextWithAccountRecordId);
-
+            if (includeInvoiceChildren) {
+                // The context may not contain the account record id at this point - we couldn't do it in the API above
+                // as we couldn't get access to the invoice object until now.
+                final InternalTenantContext contextWithAccountRecordId = internalCallContextFactory.createInternalTenantContext(invoice.getAccountId(), context);
+                invoiceDaoHelper.populateChildren(invoice, invoicesTags, false, entitySqlDaoWrapperFactory, contextWithAccountRecordId);
+            }
             return invoice;
         });
     }
@@ -279,7 +293,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             }
 
             final InternalTenantContext contextWithAccountRecordId = internalCallContextFactory.createInternalTenantContext(invoice.getAccountId(), context);
-            invoiceDaoHelper.populateChildren(invoice, invoicesTags, entitySqlDaoWrapperFactory, contextWithAccountRecordId);
+            invoiceDaoHelper.populateChildren(invoice, invoicesTags, false, entitySqlDaoWrapperFactory, contextWithAccountRecordId);
             return invoice;
         });
     }
@@ -298,7 +312,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                                   .filter(invoice -> invoice.getGrpId().equals(groupId))
                                                                   .sorted(INVOICE_MODEL_DAO_COMPARATOR)
                                                                   .collect(Collectors.toUnmodifiableList());
-                invoiceDaoHelper.populateChildren(invoices, invoicesTags, entitySqlDaoWrapperFactory, context);
+                invoiceDaoHelper.populateChildren(invoices, invoicesTags, false, entitySqlDaoWrapperFactory, context);
                 return invoices;
             }
         });
@@ -444,7 +458,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                    // items would not be re-written
                                    (invoiceItemModelDao.getAmount().compareTo(existingInvoiceItem.getAmount()) != 0)) {
                             if (checkAgainstExistingInvoiceItemState(existingInvoiceItem, invoiceItemModelDao)) {
-                                transInvoiceItemSqlDao.updateItemFields(invoiceItemModelDao.getId().toString(), invoiceItemModelDao.getAmount(), invoiceItemModelDao.getDescription(), invoiceItemModelDao.getItemDetails(), context);
+                                transInvoiceItemSqlDao.updateItemFields(invoiceItemModelDao.getId().toString(), invoiceItemModelDao.getAmount(), invoiceItemModelDao.getRate(), invoiceItemModelDao.getDescription(), invoiceItemModelDao.getQuantity(), invoiceItemModelDao.getItemDetails(), context);
                             }
                         }
                     }
@@ -522,7 +536,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             final InvoiceSqlDao invoiceDao = entitySqlDaoWrapperFactory.become(InvoiceSqlDao.class);
 
             final List<InvoiceModelDao> invoices = invoiceDao.getInvoicesBySubscription(subscriptionId.toString(), context);
-            invoiceDaoHelper.populateChildren(invoices, invoicesTags, entitySqlDaoWrapperFactory, context);
+            invoiceDaoHelper.populateChildren(invoices, invoicesTags, false, entitySqlDaoWrapperFactory, context);
 
             return invoices;
         });
@@ -537,19 +551,59 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
         }
 
         final Integer invoiceNumber = invoiceNumberParsed;
+
+        final boolean isSearchKeyCurrency = isSearchKeyCurrency(searchKey);
+
+        final SearchQuery searchQuery;
+        if (isSearchKeyCurrency) {
+            searchQuery = new SearchQuery(SqlOperator.OR);
+            searchQuery.addSearchClause("currency", SqlOperator.EQ, searchKey);
+        } else if (searchKey.startsWith(SEARCH_QUERY_MARKER)) {
+            final Matcher matcher = BALANCE_QUERY_PATTERN.matcher(searchKey);
+            if (matcher.matches()) {
+                final BigDecimal balance = new BigDecimal(matcher.group("balance"));
+                final SqlOperator comparisonOperator = SqlOperator.valueOf(matcher.group("comparator").toUpperCase(Locale.ROOT));
+                return searchInvoicesByBalance(balance, comparisonOperator, offset, limit, context);
+            }
+
+            searchQuery = new SearchQuery(searchKey,
+                                          Set.of("id",
+                                                 "account_id",
+                                                 "invoice_date",
+                                                 "target_date",
+                                                 "currency",
+                                                 "status",
+                                                 "migrated",
+                                                 "parent_invoice",
+                                                 "grp_id",
+                                                 "created_by",
+                                                 "created_date",
+                                                 "updated_by",
+                                                 "updated_date"));
+        } else {
+            searchQuery = new SearchQuery(SqlOperator.OR);
+            searchQuery.addSearchClause("id", SqlOperator.EQ, searchKey);
+            searchQuery.addSearchClause("account_id", SqlOperator.EQ, searchKey);
+        }
+
         return paginationHelper.getPagination(InvoiceSqlDao.class,
                                               new PaginationIteratorBuilder<InvoiceModelDao, Invoice, InvoiceSqlDao>() {
                                                   @Override
                                                   public Long getCount(final InvoiceSqlDao invoiceSqlDao, final InternalTenantContext context) {
-                                                      return invoiceNumber != null ? (Long) 1L : invoiceSqlDao.getSearchCount(searchKey, String.format("%%%s%%", searchKey), context);
+                                                      if (invoiceNumber != null) {
+                                                          return (Long) 1L;
+                                                      }
+
+                                                      return invoiceSqlDao.getSearchCount(searchQuery.getSearchKeysBindMap(), searchQuery.getSearchAttributes(), searchQuery.getLogicalOperator(), context);
                                                   }
 
                                                   @Override
                                                   public Iterator<InvoiceModelDao> build(final InvoiceSqlDao invoiceSqlDao, final Long offset, final Long limit, final DefaultPaginationSqlDaoHelper.Ordering ordering, final InternalTenantContext context) {
                                                       try {
-                                                          return invoiceNumber != null ?
-                                                                 List.<InvoiceModelDao>of(getByNumber(invoiceNumber, context)).iterator() :
-                                                                 invoiceSqlDao.search(searchKey, String.format("%%%s%%", searchKey), offset, limit, ordering.toString(), context);
+                                                          if (invoiceNumber != null) {
+                                                              return List.<InvoiceModelDao>of(getByNumber(invoiceNumber, false, context)).iterator();
+                                                          }
+                                                          return invoiceSqlDao.search(searchQuery.getSearchKeysBindMap(), searchQuery.getSearchAttributes(), searchQuery.getLogicalOperator(), offset, limit, ordering.toString(), context);
                                                       } catch (final InvoiceApiException ignored) {
                                                           return Collections.emptyIterator();
                                                       }
@@ -559,6 +613,24 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                               limit,
                                               context);
 
+    }
+
+    Pagination<InvoiceModelDao> searchInvoicesByBalance(final BigDecimal balance, final SqlOperator comparisonOperator, final Long offset, final Long limit, final InternalTenantContext context) {
+        return paginationHelper.getPagination(InvoiceSqlDao.class,
+                                              new PaginationIteratorBuilder<InvoiceModelDao, Invoice, InvoiceSqlDao>() {
+                                                  @Override
+                                                  public Long getCount(final InvoiceSqlDao invoiceSqlDao, final InternalTenantContext context) {
+                                                      return invoiceSqlDao.getSearchInvoicesByBalanceCount(balance, comparisonOperator, context);
+                                                  }
+
+                                                  @Override
+                                                  public Iterator<InvoiceModelDao> build(final InvoiceSqlDao invoiceSqlDao, final Long offset, final Long limit, final DefaultPaginationSqlDaoHelper.Ordering ordering, final InternalTenantContext context) {
+                                                      return invoiceSqlDao.searchInvoicesByBalance(balance, comparisonOperator, offset, limit, ordering.toString(), context);
+                                                  }
+                                              },
+                                              offset,
+                                              limit,
+                                              context);
     }
 
     @Override
@@ -714,7 +786,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                 // Retrieve invoice after the Refund
                 final InvoiceModelDao invoice = transInvoiceDao.getById(payment.getInvoiceId().toString(), context);
                 Preconditions.checkState(invoice != null, "Invoice shouldn't be null for payment " + payment.getId());
-                invoiceDaoHelper.populateChildren(invoice, invoicesTags, entitySqlDaoWrapperFactory, context);
+                invoiceDaoHelper.populateChildren(invoice, invoicesTags, false, entitySqlDaoWrapperFactory, context);
 
                 final InvoiceItemSqlDao transInvoiceItemDao = entitySqlDaoWrapperFactory.become(InvoiceItemSqlDao.class);
 
@@ -986,7 +1058,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             final BigDecimal positiveCbaAmount = cbaItem.getAmount().negate();
             final BigDecimal adjustedAmount = leftToReclaim.compareTo(positiveCbaAmount) >= 0 ? positiveCbaAmount : leftToReclaim;
             final BigDecimal itemAmount = positiveCbaAmount.subtract(adjustedAmount);
-            transactional.updateItemFields(cbaItem.getId().toString(), itemAmount.negate(), "Reclaim used credit", null, context);
+            transactional.updateItemFields(cbaItem.getId().toString(), itemAmount.negate(), null,"Reclaim used credit", null, null, context);
 
             invoiceIds.add(cbaItem.getInvoiceId());
             leftToReclaim = leftToReclaim.subtract(adjustedAmount);
@@ -1014,7 +1086,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                 invoice.getStatus() != InvoiceStatus.COMMITTED) {
                 throw new InvoiceApiException(ErrorCode.INVOICE_NOT_FOUND, invoiceId);
             }
-            invoiceDaoHelper.populateChildren(invoice, invoicesTags, entitySqlDaoWrapperFactory, context);
+            invoiceDaoHelper.populateChildren(invoice, invoicesTags, false, entitySqlDaoWrapperFactory, context);
 
             // Retrieve the invoice item and make sure it belongs to the right invoice
             final InvoiceItemSqlDao invoiceItemSqlDao = entitySqlDaoWrapperFactory.become(InvoiceItemSqlDao.class);
@@ -1025,7 +1097,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
 
             if (cbaItem.getAmount().compareTo(BigDecimal.ZERO) < 0) { /* Credit consumption */
 
-                invoiceItemSqlDao.updateItemFields(cbaItem.getId().toString(), BigDecimal.ZERO, "Delete used credit", null, context);
+                invoiceItemSqlDao.updateItemFields(cbaItem.getId().toString(), BigDecimal.ZERO, null,"Delete used credit", null, null, context);
                 invoiceIds.add(invoice.getId());
             } else if (cbaItem.getAmount().compareTo(BigDecimal.ZERO) > 0) {  /* Credit generation */
                 final InvoiceItemModelDao creditItem = invoice.getInvoiceItems().stream()
@@ -1045,9 +1117,9 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                  String.format("Unexpected state, reclaimed used credit [%s/%s]", reclaimed, amountToReclaim));
                     }
 
-                    invoiceItemSqlDao.updateItemFields(cbaItem.getId().toString(), BigDecimal.ZERO, "Delete gen credit", null, context);
+                    invoiceItemSqlDao.updateItemFields(cbaItem.getId().toString(), BigDecimal.ZERO, null, "Delete gen credit", null, null, context);
                     final BigDecimal adjustedCreditAmount = creditItem.getAmount().add(cbaItem.getAmount());
-                    invoiceItemSqlDao.updateItemFields(creditItem.getId().toString(), adjustedCreditAmount, "Delete gen credit", null, context);
+                    invoiceItemSqlDao.updateItemFields(creditItem.getId().toString(), adjustedCreditAmount, null,null,null, "Delete gen credit", context);
                     invoiceIds.add(invoice.getId());
                 } else /* System generated credit, e.g Repair invoice */ {
                     throw new InvoiceApiException(ErrorCode.INVOICE_CBA_DELETED, cbaItem.getId());
@@ -1297,7 +1369,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             final InvoiceSqlDao invoiceSqlDao = entitySqlDaoWrapperFactory.become(InvoiceSqlDao.class);
             final InvoiceModelDao invoice = invoiceSqlDao.getParentDraftInvoice(parentAccountId.toString(), context);
             if (invoice != null) {
-                invoiceDaoHelper.populateChildren(invoice, invoicesTags, entitySqlDaoWrapperFactory, context);
+                invoiceDaoHelper.populateChildren(invoice, invoicesTags, false, entitySqlDaoWrapperFactory, context);
             }
             return invoice;
         });
@@ -1315,7 +1387,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                 throw new InvoiceApiException(ErrorCode.INVOICE_ITEM_NOT_FOUND, invoiceItemId);
             }
 
-            transactional.updateItemFields(invoiceItemId.toString(), amount, null, null, context);
+            transactional.updateItemFields(invoiceItemId.toString(), amount, null,null, null,null, context);
             return null;
         });
     }
@@ -1512,6 +1584,10 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
         boolean itemShouldBeUpdated = false;
         if (inputInvoiceItem.getAmount() != null) {
             itemShouldBeUpdated = existingInvoiceItem.getAmount() == null /* unlikely */ || inputInvoiceItem.getAmount().compareTo(existingInvoiceItem.getAmount()) != 0;
+        } else if (inputInvoiceItem.getRate() != null) {
+            itemShouldBeUpdated = existingInvoiceItem.getRate() == null || inputInvoiceItem.getRate().compareTo(existingInvoiceItem.getRate()) != 0;
+        } else if (inputInvoiceItem.getQuantity() != null) {
+            itemShouldBeUpdated = existingInvoiceItem.getQuantity() == null || inputInvoiceItem.getQuantity().compareTo(existingInvoiceItem.getQuantity()) != 0;
         } else if (inputInvoiceItem.getDescription() != null) {
             itemShouldBeUpdated = existingInvoiceItem.getDescription() == null || inputInvoiceItem.getDescription().compareTo(existingInvoiceItem.getDescription()) != 0;
         } else if (inputInvoiceItem.getItemDetails() != null) {
@@ -1520,4 +1596,12 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
         return itemShouldBeUpdated;
     }
 
+    private static boolean isSearchKeyCurrency(final String searchKey) {
+        for (final Currency cur : Currency.values()) {
+            if (cur.toString().equalsIgnoreCase(searchKey)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

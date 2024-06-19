@@ -29,7 +29,6 @@ import org.killbill.billing.invoice.api.InvoiceInternalApi;
 import org.killbill.billing.invoice.api.InvoiceListenerService;
 import org.killbill.billing.invoice.api.InvoiceService;
 import org.killbill.billing.invoice.api.InvoiceUserApi;
-import org.killbill.billing.invoice.api.formatters.InvoiceFormatterFactory;
 import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory;
 import org.killbill.billing.invoice.api.svcs.DefaultInvoiceInternalApi;
 import org.killbill.billing.invoice.api.user.DefaultInvoiceUserApi;
@@ -49,8 +48,10 @@ import org.killbill.billing.invoice.notification.NextBillingDatePoster;
 import org.killbill.billing.invoice.optimizer.InvoiceOptimizer;
 import org.killbill.billing.invoice.optimizer.InvoiceOptimizerExp;
 import org.killbill.billing.invoice.optimizer.InvoiceOptimizerNoop;
+import org.killbill.billing.invoice.plugin.api.InvoiceFormatterFactory;
 import org.killbill.billing.invoice.plugin.api.InvoicePluginApi;
 import org.killbill.billing.invoice.template.bundles.DefaultResourceBundleFactory;
+import org.killbill.billing.invoice.template.formatters.DefaultInvoiceFormatterFactory;
 import org.killbill.billing.invoice.usage.RawUsageOptimizer;
 import org.killbill.billing.osgi.api.OSGIServiceRegistration;
 import org.killbill.billing.platform.api.KillbillConfigSource;
@@ -109,7 +110,7 @@ public class DefaultInvoiceModule extends KillBillModule implements InvoiceModul
         bind(NextBillingDatePoster.class).to(DefaultNextBillingDatePoster.class).asEagerSingleton();
         final TranslatorConfig config = new ConfigurationObjectFactory(skifeConfigSource).build(TranslatorConfig.class);
         bind(TranslatorConfig.class).toInstance(config);
-        bind(InvoiceFormatterFactory.class).to(config.getInvoiceFormatterFactoryClass()).asEagerSingleton();
+        bind(InvoiceFormatterFactory.class).to(DefaultInvoiceFormatterFactory.class).asEagerSingleton();
     }
 
     protected void installInvoiceDispatcher() {
@@ -134,6 +135,10 @@ public class DefaultInvoiceModule extends KillBillModule implements InvoiceModul
         bind(new TypeLiteral<OSGIServiceRegistration<InvoicePluginApi>>() {}).toProvider(DefaultInvoiceProviderPluginRegistryProvider.class).asEagerSingleton();
     }
 
+    protected void installInvoiceFormatterFactory() {
+        bind(new TypeLiteral<OSGIServiceRegistration<InvoiceFormatterFactory>>() {}).toProvider(DefaultInvoiceFormatterFactoryProviderPluginRegistryProvider.class).asEagerSingleton();
+    }
+
     protected void installInvoiceOptimizer() {
         if (killbillFeatures.isInvoiceOptimizationOn()) {
             bind(InvoiceOptimizer.class).to(InvoiceOptimizerExp.class).asEagerSingleton();
@@ -147,6 +152,7 @@ public class DefaultInvoiceModule extends KillBillModule implements InvoiceModul
         installConfig();
         installInvoicePluginApi();
         installInvoiceServices();
+        installInvoiceFormatterFactory();
         installNotifiers();
         installInvoiceDispatcher();
         installInvoiceListener();

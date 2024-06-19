@@ -30,14 +30,9 @@ import org.slf4j.LoggerFactory;
 
 public class DefaultInvoiceProviderPluginRegistry implements OSGIServiceRegistration<InvoicePluginApi> {
 
-    private final static Logger log = LoggerFactory.getLogger(DefaultInvoiceProviderPluginRegistry.class);
+    private static final Logger log = LoggerFactory.getLogger(DefaultInvoiceProviderPluginRegistry.class);
 
     private final Map<String, InvoicePluginApi> pluginsByName = new ConcurrentHashMap<String, InvoicePluginApi>();
-
-    @Inject
-    public DefaultInvoiceProviderPluginRegistry() {
-    }
-
 
     @Override
     public void registerService(final OSGIServiceDescriptor desc, final InvoicePluginApi service) {

@@ -64,6 +64,7 @@ import org.killbill.billing.invoice.dao.InvoiceItemModelDao;
 import org.killbill.billing.invoice.dao.InvoiceModelDao;
 import org.killbill.billing.invoice.model.CreditAdjInvoiceItem;
 import org.killbill.billing.invoice.model.DefaultInvoice;
+import org.killbill.billing.invoice.model.SearchInvoice;
 import org.killbill.billing.invoice.model.ExternalChargeInvoiceItem;
 import org.killbill.billing.invoice.model.InvoiceItemFactory;
 import org.killbill.billing.invoice.model.TaxInvoiceItem;
@@ -71,7 +72,6 @@ import org.killbill.billing.invoice.template.HtmlInvoice;
 import org.killbill.billing.invoice.template.HtmlInvoiceGenerator;
 import org.killbill.billing.payment.api.PluginProperty;
 import org.killbill.billing.tag.TagInternalApi;
-import org.killbill.commons.utils.Preconditions;
 import org.killbill.billing.util.UUIDs;
 import org.killbill.billing.util.api.AuditLevel;
 import org.killbill.billing.util.api.TagApiException;
@@ -79,13 +79,14 @@ import org.killbill.billing.util.audit.AuditLogWithHistory;
 import org.killbill.billing.util.callcontext.CallContext;
 import org.killbill.billing.util.callcontext.InternalCallContextFactory;
 import org.killbill.billing.util.callcontext.TenantContext;
-import org.killbill.commons.utils.collect.Iterables;
 import org.killbill.billing.util.entity.Pagination;
 import org.killbill.billing.util.entity.dao.DefaultPaginationHelper.SourcePaginationBuilder;
 import org.killbill.billing.util.optimizer.BusOptimizer;
 import org.killbill.billing.util.tag.ControlTagType;
 import org.killbill.billing.util.tag.Tag;
 import org.killbill.bus.api.PersistentBus.EventBusException;
+import org.killbill.commons.utils.Preconditions;
+import org.killbill.commons.utils.collect.Iterables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -221,7 +222,7 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
                                                       return dao.searchInvoices(searchKey, offset, limit, internalCallContextFactory.createInternalTenantContextWithoutAccountRecordId(context));
                                                   }
                                               },
-                                              DefaultInvoice::new
+                                              SearchInvoice::new
                                              );
     }
 
@@ -251,7 +252,7 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
     public Invoice getInvoiceByNumber(final Integer number, final TenantContext context) throws InvoiceApiException {
         // The account record id will be populated in the DAO
         final InternalTenantContext internalTenantContextWithoutAccountRecordId = internalCallContextFactory.createInternalTenantContextWithoutAccountRecordId(context);
-        final InvoiceModelDao invoice = dao.getByNumber(number, internalTenantContextWithoutAccountRecordId);
+        final InvoiceModelDao invoice = dao.getByNumber(number, true, internalTenantContextWithoutAccountRecordId);
 
         final InternalTenantContext internalTenantContext = internalCallContextFactory.createInternalTenantContext(invoice.getAccountId(), context);
         return new DefaultInvoice(invoice, getCatalogSafelyForPrettyNames(internalTenantContext));
@@ -456,7 +457,7 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
             originalProperties.forEach(properties::add);
         }
 
-        final Collection<InvoiceItem> dispatchedInvoiceItems = invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, context);
+        final Collection<InvoiceItem> dispatchedInvoiceItems = invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, true, context);
 
         final Collection<InvoiceItem> adjustmentInvoiceItems = dispatchedInvoiceItems.stream()
                 .filter(invoiceItem -> InvoiceItemType.ITEM_ADJ.equals(invoiceItem.getInvoiceItemType()))
@@ -664,7 +665,7 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
             }
         };
 
-        return invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, context);
+        return invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, true, context);
     }
 
     private void notifyBusOfInvoiceAdjustment(final UUID invoiceId, final UUID accountId, final InternalCallContext context) {
@@ -703,9 +704,8 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
         final LinkedList<PluginProperty> properties = new LinkedList<PluginProperty>();
         properties.add(new PluginProperty(INVOICE_OPERATION, "commit", false));
 
-        invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, context);
+        invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, false, context);
     }
-
     @Override
     public void transferChildCreditToParent(final UUID childAccountId, final CallContext context) throws InvoiceApiException {
 
@@ -776,7 +776,7 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
             @Override
             public Iterable<DefaultInvoice> prepareInvoices() throws InvoiceApiException {
                 final InternalCallContext internalCallContext = internalCallContextFactory.createInternalCallContext(invoiceId, ObjectType.INVOICE, context);
-                final InvoiceModelDao rawInvoice = dao.getById(invoiceId, internalCallContext);
+                final InvoiceModelDao rawInvoice = dao.getById(invoiceId, true, internalCallContext);
                 if (rawInvoice.getStatus() == InvoiceStatus.COMMITTED) {
                     checkInvoiceNotRepaired(rawInvoice);
                     checkInvoiceDoesContainUsedGeneratedCredit(accountId, rawInvoice, context);
@@ -795,9 +795,8 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
         final LinkedList<PluginProperty> properties = new LinkedList<PluginProperty>();
         properties.add(new PluginProperty(INVOICE_OPERATION, "void", false));
 
-        invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, context);
+        invoiceApiHelper.dispatchToInvoicePluginsAndInsertItems(accountId, false, withAccountLock, properties, false, context);
     }
-
     @Override
     public List<AuditLogWithHistory> getInvoiceAuditLogsWithHistoryForId(final UUID invoiceId, final AuditLevel auditLevel, final TenantContext tenantContext) {
         return dao.getInvoiceAuditLogsWithHistoryForId(invoiceId, auditLevel, internalCallContextFactory.createInternalTenantContext(invoiceId, ObjectType.INVOICE, tenantContext));
