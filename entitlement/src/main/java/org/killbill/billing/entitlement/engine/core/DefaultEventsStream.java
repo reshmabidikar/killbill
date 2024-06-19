@@ -77,8 +77,13 @@ public class DefaultEventsStream implements EventsStream {
     private LocalDate entitlementEffectiveEndDate;
     private DateTime entitlementEffectiveEndDateTime;
 
+    //private LocalDate entitlementEffectiveExpireDate;
+    private DateTime entitlementEffectiveExpireDateTime;
+
     private BlockingState entitlementStartEvent;
     private BlockingState entitlementCancelEvent;
+
+    private BlockingState entitlementExpiredEvent;
     private EntitlementState entitlementState;
 
     private final boolean includeDeletedEvents;
@@ -427,6 +432,7 @@ public class DefaultEventsStream implements EventsStream {
         computeCurrentBlockingAggregator();
         computeEntitlementStartEvent();
         computeEntitlementCancelEvent();
+        computeEntitlementExpiredEvent();
         computeStateForEntitlement();
     }
 
@@ -491,10 +497,20 @@ public class DefaultEventsStream implements EventsStream {
         entitlementEffectiveEndDate = entitlementEffectiveEndDateTime != null ? internalTenantContext.toLocalDate(entitlementEffectiveEndDateTime) : null;
     }
 
+    private void computeEntitlementExpiredEvent() {
+        entitlementExpiredEvent = subscriptionEntitlementStates.stream()
+                                                              .filter(input -> DefaultEntitlementApi.ENT_STATE_EXPIRED.equals(input.getStateName()))
+                                                              .findFirst().orElse(null);
+        entitlementEffectiveExpireDateTime =  entitlementExpiredEvent != null ? entitlementExpiredEvent.getEffectiveDate() : null;
+        //entitlementEffectiveExpireDate = entitlementEffectiveExpireDateTime != null ? internalTenantContext.toLocalDate(entitlementEffectiveExpireDateTime) : null;
+    }
+
     private void computeStateForEntitlement() {
         // Current state for the ENTITLEMENT_SERVICE_NAME is set to cancelled
         if (entitlementEffectiveEndDateTime != null && entitlementEffectiveEndDateTime.compareTo(utcNow) <= 0) {
             entitlementState = EntitlementState.CANCELLED;
+        } else if (entitlementEffectiveExpireDateTime != null && entitlementEffectiveExpireDateTime.compareTo(utcNow) <= 0) {
+            entitlementState = EntitlementState.EXPIRED;
         } else {
             if (entitlementEffectiveStartDateTime.compareTo(utcNow) > 0) {
                 entitlementState = EntitlementState.PENDING;

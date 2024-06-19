@@ -63,12 +63,14 @@ import org.killbill.billing.platform.api.KillbillService.KILLBILL_SERVICES;
 import org.killbill.billing.security.api.SecurityApi;
 import org.killbill.billing.subscription.api.SubscriptionBase;
 import org.killbill.billing.subscription.api.SubscriptionBaseInternalApi;
+import org.killbill.billing.subscription.api.SubscriptionBaseTransitionType;
 import org.killbill.billing.subscription.api.SubscriptionBaseWithAddOns;
 import org.killbill.billing.subscription.api.SubscriptionBaseWithAddOnsSpecifier;
 import org.killbill.billing.subscription.api.transfer.SubscriptionBaseTransferApi;
 import org.killbill.billing.subscription.api.transfer.SubscriptionBaseTransferApiException;
 import org.killbill.billing.subscription.api.user.SubscriptionBaseApiException;
 import org.killbill.billing.subscription.api.user.SubscriptionBaseBundle;
+import org.killbill.billing.subscription.api.user.SubscriptionBaseTransition;
 import org.killbill.billing.util.callcontext.CallContext;
 import org.killbill.billing.util.callcontext.InternalCallContextFactory;
 import org.killbill.billing.util.callcontext.TenantContext;
@@ -86,6 +88,8 @@ public class DefaultEntitlementApi extends DefaultEntitlementApiBase implements 
     public static final String ENT_STATE_BLOCKED = "ENT_BLOCKED";
     public static final String ENT_STATE_CLEAR = "ENT_CLEAR";
     public static final String ENT_STATE_CANCELLED = "ENT_CANCELLED";
+
+    public static final String ENT_STATE_EXPIRED = "ENT_EXPIRED";
 
     private final SubscriptionBaseInternalApi subscriptionBaseInternalApi;
     private final SubscriptionBaseTransferApi subscriptionBaseTransferApi;
@@ -573,6 +577,19 @@ public class DefaultEntitlementApi extends DefaultEntitlementApiBase implements 
                                                                              false,
                                                                              baseEntitlementWithAddOnsSpecifier.getEntitlementEffectiveDate());
                 blockingStateMap.put(blockingState, subscriptionsWithAddOns.get(i).getBundle().getId());
+
+                final SubscriptionBaseTransition expiredTransition = subscriptionBase.getAllTransitions(false).stream().filter( transition -> transition.getTransitionType() == SubscriptionBaseTransitionType.EXPIRED).findFirst().orElse(null);
+                if (expiredTransition != null) {
+                    final BlockingState expiredBlockingState = new DefaultBlockingState(subscriptionBase.getId(),
+                                                                                 BlockingStateType.SUBSCRIPTION,
+                                                                                 DefaultEntitlementApi.ENT_STATE_EXPIRED,
+                                                                                 KILLBILL_SERVICES.ENTITLEMENT_SERVICE.getServiceName(),
+                                                                                 true,
+                                                                                 true,
+                                                                                 true,
+                                                                                        expiredTransition.getEffectiveTransitionTime());
+                    blockingStateMap.put(expiredBlockingState, subscriptionsWithAddOns.get(i).getBundle().getId());
+                }
 
                 createdSubscriptionIds.add(subscriptionBase.getId());
             }

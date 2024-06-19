@@ -40,6 +40,7 @@ import org.killbill.billing.catalog.api.PlanPhase;
 import org.killbill.billing.catalog.api.PriceList;
 import org.killbill.billing.catalog.api.Product;
 import org.killbill.billing.catalog.api.ProductCategory;
+import org.killbill.billing.catalog.api.VersionedCatalog;
 import org.killbill.billing.entitlement.DefaultEntitlementService;
 import org.killbill.billing.entitlement.EventsStream;
 import org.killbill.billing.entitlement.api.EntitlementPluginExecution.WithEntitlementPlugin;
@@ -387,6 +388,16 @@ public class DefaultEntitlement extends EntityBase implements Entitlement {
             }
         };
         return pluginExecution.executeWithPlugin(cancelEntitlementWithPlugin, pluginContext);
+    }
+
+    private void removeExpiryBlockingStatePastCancellation(final InternalCallContext contextWithValidAccountRecordId, final DateTime cancellationDateTime) {
+        List<BlockingState> existingBlockingStates = blockingStateDao.getBlockingState(id, BlockingStateType.SUBSCRIPTION, null, contextWithValidAccountRecordId); //TODO_1930 - is entitlementEffectiveDate correct? If null is specified a NPE occurs
+        //                List<BlockingState> existingBlockingStates = blockingStateDao.getBlockingAllForAccountRecordId(getCatalog(contextWithValidAccountRecordId), contextWithValidAccountRecordId);
+        BlockingState expiredBlockingState = existingBlockingStates.stream().filter(state -> state.getStateName().equals("ENT_EXPIRED")).findFirst().orElse(null);
+        if (expiredBlockingState != null && expiredBlockingState.getEffectiveDate().isAfter(cancellationDateTime)) {
+            blockingStateDao.unactiveBlockingState(expiredBlockingState.getId(), contextWithValidAccountRecordId);
+        }
+
     }
 
     @Override
