@@ -31,13 +31,13 @@ import org.killbill.billing.entitlement.api.Subscription;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
 
 public class TestDateConversionsSubscription extends TestIntegrationBase {
 
     @Test(groups = "slow")
     public void testCreateSubscriptionWithoutDatesUTC() throws Exception {
+        // This test demonstrates that when no dates are specified at the time of subscription creation,
+        // the current UTC time is used as the subscription start date irrespective of the account time zone
         final DateTime initialDateTime = new DateTime(2024, 1,1,3,30);
         clock.setTime(initialDateTime);
         final DateTime referenceTime = new DateTime(2024, 1,1,6,0);
@@ -57,6 +57,8 @@ public class TestDateConversionsSubscription extends TestIntegrationBase {
 
     @Test(groups = "slow")
     public void testCreateSubscriptionWithoutDatesPST() throws Exception {
+        // This test demonstrates that when no dates are specified at the time of subscription creation,
+        // the current UTC time is used as the subscription start date irrespective of the account time zone
         final DateTime initialDateTime = new DateTime(2024, 1,1,3,30);
         clock.setTime(initialDateTime);
         final DateTime referenceTime = new DateTime(2024, 1,1,6,0);
