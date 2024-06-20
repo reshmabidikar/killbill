@@ -15,7 +15,7 @@
  * under the License.
  */
 
-package org.killbill.billing.beatrix.integration.usage;
+package org.killbill.billing.beatrix.integration;
 
 import java.util.Collections;
 import java.util.UUID;
