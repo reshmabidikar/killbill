@@ -102,7 +102,7 @@ public class TestInArrearCreateChangeSOTPolicy extends TestIntegrationBase {
         varAddOnEntitlement2 = entitlementApi.getEntitlementForId(varAddOnEntitlement2.getId(), false, callContext);
         Assert.assertEquals(varAddOnEntitlement2.getLastActivePlan().getName(), "var-ao4-in-arrear");
 
-        //NO INVOICE GENERATED
+        //NO INVOICE GENERATED - IS THIS EXPECTED? OR SHOULD INVOICE BE GENERATED DUE TO PLAN CHANGE?
         List<Invoice> invoices = invoiceUserApi.getInvoicesByAccount(account.getId(), true, true, true, callContext);
         Assert.assertEquals(invoices.size(), 0);
 
@@ -111,7 +111,7 @@ public class TestInArrearCreateChangeSOTPolicy extends TestIntegrationBase {
         clock.setDay(new LocalDate(2025, 4, 20));
         assertListenerStatus();
 
-        //INVOICE GENERATED AS EXPECTED
+        //INVOICE GENERATED WITH USAGE ITEMS
         invoices = invoiceUserApi.getInvoicesByAccount(account.getId(), true, true, true, callContext);
         Assert.assertEquals(invoices.size(), 1);
 
