@@ -1233,5 +1233,41 @@ public class TestInvoice extends TestJaxrsBase {
         assertEquals(invoice.getItems().size(), 2);
         final InvoiceItem item = invoice.getItems().get(0);
     }
+
+    @Test(groups = "slow", description = "https://github.com/killbill/killbill/issues/2127")
+    public void testInvoiceSearch() throws Exception {
+
+        final LocalDate initialDate = new LocalDate(2012, 4, 25);
+        clock.setDay(initialDate);
+
+        final Account account = createAccountNoPMBundleAndSubscription(); // create account with subscription to shotgun-monthly plan
+        final Subscription subscription = accountApi.getAccountBundles(account.getAccountId(), null, null, requestOptions).get(0).getSubscriptions().get(0);
+
+        Invoices invoices = accountApi.getInvoicesForAccount(account.getAccountId(), null, null, false, false, false, true, null, AuditLevel.FULL, requestOptions);
+        Assert.assertNotNull(invoices);
+        Assert.assertEquals(invoices.size(), 1);
+
+        //This works
+        invoices = invoiceApi.searchInvoices("_q=1&status=COMMITTED", requestOptions);
+        Assert.assertNotNull(invoices);
+        Assert.assertEquals(invoices.size(), 1);
+
+        //This works
+        invoices = invoiceApi.searchInvoices("_q=1&status%5Blte%5D=COMMITTED", requestOptions);
+        Assert.assertNotNull(invoices);
+        Assert.assertEquals(invoices.size(), 1);
+
+        //This does not work
+        invoices = invoiceApi.searchInvoices("_q=1&target_date=2012-04-25", requestOptions);
+        Assert.assertNotNull(invoices);
+        Assert.assertEquals(invoices.size(), 1);
+
+        //This does not work
+        invoices = invoiceApi.searchInvoices("_q=1&target_date%5Blte%5D=2012-04-25", requestOptions);
+        Assert.assertNotNull(invoices);
+        Assert.assertEquals(invoices.size(), 1);
+
+    }
+
     
 }
