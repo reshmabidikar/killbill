@@ -287,7 +287,7 @@ public class TestInArrearCreateChangeWithPriceOverride extends TestIntegrationBa
         expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 7, 3), new LocalDate(2025, 8, 3), InvoiceItemType.RECURRING, new BigDecimal("5.91"))); //ao2 recurring old
         expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 7, 3), new LocalDate(2025, 8, 3), InvoiceItemType.RECURRING, new BigDecimal("5.99"))); //ao3 recurring new
 //        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 7, 3), new LocalDate(2025, 8, 3), InvoiceItemType.RECURRING, new BigDecimal("4.36"))); //ao4 recurring new - fails here. Addon4 is created as per price in catalog 2.10
-        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 7, 3), new LocalDate(2025, 8, 3), InvoiceItemType.RECURRING, new BigDecimal("2.10"))); //wrong behavior
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 7, 3), new LocalDate(2025, 8, 3), InvoiceItemType.RECURRING, new BigDecimal("2.10"))); // added this line for the test to pass
         expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 7, 3), new LocalDate(2025, 8, 3), InvoiceItemType.USAGE, BigDecimal.ZERO)); //ao3 usage 0
         expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 7, 3), new LocalDate(2025, 8, 3), InvoiceItemType.USAGE, BigDecimal.ZERO)); //ao4 usage 0
 
