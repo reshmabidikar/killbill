@@ -469,7 +469,7 @@ public class TestWithInArrearSubscriptions extends TestIntegrationBase {
         checkNoMoreInvoiceToGenerate(account);
     }
 
-    @Test
+    @Test(groups = "slow", description="https://github.com/killbill/killbill/issues/2131")
     public void testForIllegalInvoicingState() throws Exception {
         LocalDate today = new LocalDate(2024, 9, 30);
         // Set clock to the initial start date - we implicitly assume here that the account timezone is UTC
@@ -526,7 +526,7 @@ public class TestWithInArrearSubscriptions extends TestIntegrationBase {
         assertEquals(bpEntitlement.getState(), EntitlementState.ACTIVE);
         assertEquals(bpEntitlement.getLastActivePlan().getName(), "basic-support-monthly-notrial");
 
-        //Move to 2024-04-28 - invoice should be generated as per new plan
+        //Move to 2024-04-28 - invoice should be generated as per new plan - Test Fails here as an ILLEGAL INVOICING STATE error occurs
         busHandler.pushExpectedEvents(NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT);
         clock.addMonths(1); //2024-04-28
         assertListenerStatus();
