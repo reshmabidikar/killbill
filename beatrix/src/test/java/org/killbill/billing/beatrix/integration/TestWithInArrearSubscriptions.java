@@ -20,6 +20,7 @@ package org.killbill.billing.beatrix.integration;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -36,6 +37,7 @@ import org.killbill.billing.entitlement.api.DefaultEntitlementSpecifier;
 import org.killbill.billing.entitlement.api.Entitlement;
 import org.killbill.billing.entitlement.api.Entitlement.EntitlementActionPolicy;
 import org.killbill.billing.entitlement.api.Entitlement.EntitlementState;
+import org.killbill.billing.invoice.api.Invoice;
 import org.killbill.billing.invoice.api.InvoiceItemType;
 import org.killbill.billing.platform.api.KillbillConfigSource;
 import org.testng.annotations.Test;
@@ -465,6 +467,69 @@ public class TestWithInArrearSubscriptions extends TestIntegrationBase {
         addOnEntitlement = entitlementApi.getEntitlementForId(addonEntitlementId, false, callContext);
         assertEquals(addOnEntitlement.getState(), EntitlementState.CANCELLED);
         checkNoMoreInvoiceToGenerate(account);
+    }
+
+    @Test
+    public void testForIllegalInvoicingState() throws Exception {
+        LocalDate today = new LocalDate(2024, 9, 30);
+        // Set clock to the initial start date - we implicitly assume here that the account timezone is UTC
+        clock.setDay(today);
+
+        final Account account = createAccountWithNonOsgiPaymentMethod(getAccountData(30));
+
+        // CREATE BASE SUBSCRIPTION. SINCE IN_ARREAR BILLING IS USED, INVOICE IS NOT GENERATED
+        final PlanPhaseSpecifier spec = new PlanPhaseSpecifier("premium-support-monthly-notrial");
+        busHandler.pushExpectedEvents(NextEvent.CREATE, NextEvent.BLOCK, NextEvent.NULL_INVOICE);
+        final UUID bpEntitlementId = entitlementApi.createBaseEntitlement(account.getId(), new DefaultEntitlementSpecifier(spec, null, null, null, null), "bundleExternalKey", null, null, false, true, Collections.emptyList(), callContext);
+        assertListenerStatus();
+        Entitlement bpEntitlement = entitlementApi.getEntitlementForId(bpEntitlementId, false, callContext);
+        assertNotNull(bpEntitlement);
+        assertEquals(bpEntitlement.getState(), EntitlementState.ACTIVE);
+        assertEquals(bpEntitlement.getLastActivePlan().getName(), "premium-support-monthly-notrial");
+
+        //move clock by a month (2024-10-30) and verify that invoice is generated
+        busHandler.pushExpectedEvents(NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT);
+        clock.addMonths(1); //2024-10-30
+        assertListenerStatus();
+        List<Invoice> invoices = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext);
+        assertEquals(invoices.size(), 1);
+
+        //move clock to 2025-01-30
+        busHandler.pushExpectedEvents(NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT, NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT, NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT);
+        clock.addMonths(3); //2025-01-30
+        assertListenerStatus();
+        invoices = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext);
+        assertEquals(invoices.size(), 4);
+
+        //move to 2025-02-28
+        busHandler.pushExpectedEvents(NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT);
+        clock.addMonths(1); //2024-02-28
+        assertListenerStatus();
+        invoices = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext);
+        assertEquals(invoices.size(), 5);
+        invoiceChecker.checkInvoice(account.getId(), 5, callContext, List.of(new ExpectedInvoiceItemCheck(new LocalDate(2025, 1, 30), new LocalDate(2025, 2, 28), InvoiceItemType.RECURRING, new BigDecimal("1000"))));
+        LocalDate changeDate = clock.getUTCToday(); //2025-02-28
+
+        //change plan with date=2024-03-28
+        final PlanPhaseSpecifier newSpec = new PlanPhaseSpecifier("basic-support-monthly-notrial");
+        bpEntitlement.changePlanWithDate(new DefaultEntitlementSpecifier(newSpec, null, null, null, null), changeDate.plusMonths(1), Collections.emptyList(), callContext);
+
+        //move to 2024-03-28 - plan change is effective
+        busHandler.pushExpectedEvents(NextEvent.CHANGE, NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT);
+        clock.addMonths(1); //2024-03-28
+        assertListenerStatus();
+        invoices = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext);
+        assertEquals(invoices.size(), 6);
+        invoiceChecker.checkInvoice(account.getId(), 6, callContext, List.of(new ExpectedInvoiceItemCheck(new LocalDate(2025, 2, 28), new LocalDate(2025, 3, 30), InvoiceItemType.RECURRING, new BigDecimal("1000"))));
+
+        bpEntitlement = entitlementApi.getEntitlementForId(bpEntitlementId, false, callContext);
+        assertEquals(bpEntitlement.getState(), EntitlementState.ACTIVE);
+        assertEquals(bpEntitlement.getLastActivePlan().getName(), "basic-support-monthly-notrial");
+
+        //Move to 2024-04-28 - invoice should be generated as per new plan
+        busHandler.pushExpectedEvents(NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT);
+        clock.addMonths(1); //2024-04-28
+        assertListenerStatus();
     }
 
 }
