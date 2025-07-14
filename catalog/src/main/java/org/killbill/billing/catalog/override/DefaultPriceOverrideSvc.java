@@ -74,9 +74,11 @@ public class DefaultPriceOverrideSvc implements PriceOverrideSvc {
 
     @Override
     public DefaultPlan getOrCreateOverriddenPlan(final StandaloneCatalog standaloneCatalog, final Plan parentPlan, final DateTime catalogEffectiveDate, final List<PlanPhasePriceOverride> overrides, @Nullable final InternalCallContext context) throws CatalogApiException {
+        System.out.println("Reshma in getOrCreateOverriddenPlan");
         final PlanPhasePriceOverride[] resolvedOverride = new PlanPhasePriceOverride[parentPlan.getAllPhases().length];
         int index = 0;
         for (final PlanPhase curPhase : parentPlan.getAllPhases()) {
+            System.out.println("Reshma 1 curPhase:"+curPhase.getPhaseType());
             final PlanPhasePriceOverride curOverride = overrides.stream()
                     .filter(input -> {
                         if (input.getPhaseName() != null) {
@@ -88,7 +90,11 @@ public class DefaultPriceOverrideSvc implements PriceOverrideSvc {
                         return curPlanPhaseSpecifier.getPhaseType().equals(curPhase.getPhaseType());
                     })
                     .findFirst().orElse(null);
-
+            if(curOverride != null) {
+                System.out.println("Reshma 2 cur override:"+curOverride.getPhaseName());
+            } else {
+                System.out.println("Reshma 2 cur override is null");
+            }
             if (curOverride != null) {
                 final List<UsagePriceOverride> resolvedUsageOverrides = getResolvedUsageOverrides(curPhase.getUsages(), curOverride.getUsagePriceOverrides());
                 resolvedOverride[index++] = new DefaultPlanPhasePriceOverride(curPhase.getName(),
@@ -96,14 +102,18 @@ public class DefaultPriceOverrideSvc implements PriceOverrideSvc {
                                                                               curOverride.getFixedPrice(),
                                                                               curOverride.getRecurringPrice(),
                                                                               resolvedUsageOverrides);
+                System.out.println("Reshma 3 resolvedUsageOverrides:"+resolvedUsageOverrides.size());
             } else {
                 resolvedOverride[index++] = null;
             }
         }
 
         for (int i = 0; i < resolvedOverride.length; i++) {
+
             final PlanPhasePriceOverride curOverride = resolvedOverride[i];
+            System.out.println("Reshma 4 resolvedUsageOverrides.curOverride:"+curOverride.getPhaseName());
             if (curOverride != null) {
+
                 final DefaultPlanPhase curPhase = (DefaultPlanPhase) parentPlan.getAllPhases()[i];
 
                 if (curPhase.getFixed() == null && curOverride.getFixedPrice() != null) {

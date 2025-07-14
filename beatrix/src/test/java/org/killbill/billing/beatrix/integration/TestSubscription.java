@@ -31,11 +31,21 @@ import org.killbill.billing.ErrorCode;
 import org.killbill.billing.account.api.Account;
 import org.killbill.billing.api.TestApiListener.NextEvent;
 import org.killbill.billing.beatrix.util.InvoiceChecker.ExpectedInvoiceItemCheck;
+import org.killbill.billing.catalog.DefaultPlanPhasePriceOverride;
+import org.killbill.billing.catalog.DefaultTierPriceOverride;
+import org.killbill.billing.catalog.DefaultTieredBlockPriceOverride;
+import org.killbill.billing.catalog.DefaultUsagePriceOverride;
 import org.killbill.billing.catalog.api.BillingActionPolicy;
 import org.killbill.billing.catalog.api.BillingPeriod;
+import org.killbill.billing.catalog.api.Currency;
+import org.killbill.billing.catalog.api.PlanPhasePriceOverride;
 import org.killbill.billing.catalog.api.PlanPhaseSpecifier;
 import org.killbill.billing.catalog.api.PriceListSet;
 import org.killbill.billing.catalog.api.ProductCategory;
+import org.killbill.billing.catalog.api.TierPriceOverride;
+import org.killbill.billing.catalog.api.TieredBlockPriceOverride;
+import org.killbill.billing.catalog.api.UsagePriceOverride;
+import org.killbill.billing.catalog.api.UsageType;
 import org.killbill.billing.entitlement.api.BaseEntitlementWithAddOnsSpecifier;
 import org.killbill.billing.entitlement.api.DefaultBaseEntitlementWithAddOnsSpecifier;
 import org.killbill.billing.entitlement.api.DefaultEntitlement;
@@ -751,6 +761,8 @@ public class TestSubscription extends TestIntegrationBase {
         final PlanPhaseSpecifier newPlanSpec = new PlanPhaseSpecifier("blowdart-monthly-notrial", null);
         entitlement.changePlanWithDate(new DefaultEntitlementSpecifier(newPlanSpec), initialDate, Collections.emptyList(), callContext);
         entitlement = entitlementApi.getEntitlementForId(entitlementId, false, callContext);
+        Subscription subscription = subscriptionApi.getSubscriptionForEntitlementId(entitlementId, false, callContext);
+        List<SubscriptionEvent> events = subscription.getSubscriptionEvents();
 
         //PLAN CHANGED SUCCESSFULLY
         assertEquals(entitlement.getState(), EntitlementState.ACTIVE);
@@ -758,6 +770,52 @@ public class TestSubscription extends TestIntegrationBase {
         assertEquals(internalCallContext.toLocalDate(entitlement.getEffectiveStartDate()), initialDate);
         assertListenerStatus();
     }
+
+    @Test(groups = "slow", description = "https://github.com/killbill/killbill/issues/1631")
+    public void testChangePlanWithPriceOverrides() throws Exception {
+
+        final LocalDate initialDate = new LocalDate(2015, 8, 1);
+        clock.setDay(initialDate);
+
+        final Account account = createAccountWithNonOsgiPaymentMethod(getAccountData(0));
+
+        //MOVE CLOCK BY A FEW MINUTES SO THAT SUBSCRIPTION START DATETIME IS A LITTLE AFTER INITIAL DATE TIME
+        clock.setTime(clock.getUTCNow().plusMinutes(2));
+
+        //CREATE PLAN
+        busHandler.pushExpectedEvents(NextEvent.CREATE, NextEvent.BLOCK, NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT,
+                                      NextEvent.PAYMENT);
+
+        final PlanPhaseSpecifier spec = new PlanPhaseSpecifier("pistol-monthly-notrial", null);
+        final UUID entitlementId = entitlementApi.createBaseEntitlement(account.getId(), new DefaultEntitlementSpecifier(spec, null, null, UUID.randomUUID().toString(), null), "something", initialDate, initialDate, false, true, Collections.emptyList(), callContext);
+        assertNotNull(entitlementId);
+        Entitlement entitlement = entitlementApi.getEntitlementForId(entitlementId, false, callContext);
+        assertEquals(entitlement.getState(), EntitlementState.ACTIVE);
+        assertEquals(entitlement.getLastActiveProduct().getName(), "Pistol");
+        assertListenerStatus();
+
+        Invoice invoice = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext).get(0);
+        List<ExpectedInvoiceItemCheck> toBeChecked = List.of(
+                new ExpectedInvoiceItemCheck(new LocalDate(2015, 8, 1), new LocalDate(2015, 9, 1), InvoiceItemType.RECURRING, new BigDecimal("19.95")));
+        invoiceChecker.checkInvoice(invoice.getId(), callContext, toBeChecked);
+
+
+        clock.addDays(10);
+
+        //CHANGE PLAN WITH PRICE_OVERRIDES
+        busHandler.pushExpectedEvents(NextEvent.CHANGE, NextEvent.INVOICE, NextEvent.PAYMENT, NextEvent.INVOICE_PAYMENT);
+        PlanPhasePriceOverride planPhaseOverride = new DefaultPlanPhasePriceOverride("blowdart-monthly-notrial-evergreen", Currency.USD, null, new BigDecimal(30), null);
+        final PlanPhaseSpecifier newPlanSpec = new PlanPhaseSpecifier("blowdart-monthly-notrial", null);
+        entitlement.changePlanWithDate(new DefaultEntitlementSpecifier(newPlanSpec, null, null, null, List.of(planPhaseOverride)), clock.getUTCNow(), Collections.emptyList(), callContext);
+        entitlement = entitlementApi.getEntitlementForId(entitlementId, false, callContext);
+
+//        //PLAN CHANGED SUCCESSFULLY
+//        assertEquals(entitlement.getState(), EntitlementState.ACTIVE);
+//        assertEquals(entitlement.getLastActiveProduct().getName(), "Blowdart");
+//        assertEquals(internalCallContext.toLocalDate(entitlement.getEffectiveStartDate()), initialDate);
+//        assertListenerStatus();
+    }
+
 
     @Test(groups = "slow", description = "https://github.com/killbill/killbill/issues/1030")
     public void testCreateSubscriptionChangePlanAndRetrieveEvents() throws Exception {

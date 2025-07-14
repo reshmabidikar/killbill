@@ -293,10 +293,197 @@ public class TestInArrearCreateChangeWithPriceOverride extends TestIntegrationBa
 
         invoice = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext).get(1);
         invoiceChecker.checkInvoice(invoice.getId(), callContext, expectedInvoices);
-
-
-
     }
+
+    @Test(groups = "slow")
+    public void testCreateChangeWithPriceOverride10June() throws Exception {
+
+        LocalDate today = new LocalDate(2025, 3, 31);
+        clock.setDay(today);
+
+        final Account account = createAccountWithNonOsgiPaymentMethod(getAccountData(0));
+
+        // create subscription bundle with base, 2 addons and 1 usage addon
+
+        //base - no price overrides
+        final EntitlementSpecifier baseEntitlementSpecifier = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("standard-monthly-in-arrear"));
+
+        //ao1 with 1.20 recurring price override
+        PlanPhasePriceOverride planPhaseOverride = new DefaultPlanPhasePriceOverride("ao1-in-arrear-evergreen", Currency.USD, null, new BigDecimal(1.20), null);
+        final EntitlementSpecifier addOnEntitlementSpecifier1 = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao1-in-arrear", PhaseType.EVERGREEN), null, null, null, List.of(planPhaseOverride));
+
+        //ao2 with 5.91 recurring price override
+        planPhaseOverride = new DefaultPlanPhasePriceOverride("ao2-in-arrear-evergreen", Currency.USD, null, new BigDecimal(5.91), null);
+        final EntitlementSpecifier addOnEntitlementSpecifier2 = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao2-in-arrear", PhaseType.EVERGREEN), null, null, null, List.of(planPhaseOverride));
+
+        //ao3 with 5.88 recurring and 1.25 usage price override
+        TieredBlockPriceOverride tieredBlockPriceOverride = new DefaultTieredBlockPriceOverride("bullets", BigDecimal.valueOf(1), new BigDecimal("1.25"), Currency.USD, BigDecimal.valueOf(-1));
+        TierPriceOverride tierPriceOverride = new DefaultTierPriceOverride(List.of(tieredBlockPriceOverride));
+        UsagePriceOverride usagePriceOverride = new DefaultUsagePriceOverride("ao3-usage", UsageType.CONSUMABLE, List.of(tierPriceOverride));
+        planPhaseOverride = new DefaultPlanPhasePriceOverride("ao3-in-arrear-evergreen", Currency.USD, null, new BigDecimal("5.88"), List.of(usagePriceOverride));
+        final EntitlementSpecifier addOnEntitlementSpecifier3 = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao3-in-arrear", PhaseType.EVERGREEN), null, null, null, List.of(planPhaseOverride));
+
+        //create subscription
+        final List<EntitlementSpecifier> specifierList = List.of(baseEntitlementSpecifier, addOnEntitlementSpecifier1, addOnEntitlementSpecifier2, addOnEntitlementSpecifier3);
+        final BaseEntitlementWithAddOnsSpecifier cartSpecifier = new DefaultBaseEntitlementWithAddOnsSpecifier(null, null, specifierList, null, null, false);
+        final List<BaseEntitlementWithAddOnsSpecifier> entitlementWithAddOnsSpecifierList = List.of(cartSpecifier);
+        busHandler.pushExpectedEvents(NextEvent.CREATE, NextEvent.CREATE, NextEvent.CREATE, NextEvent.CREATE, NextEvent.BLOCK, NextEvent.BLOCK, NextEvent.BLOCK, NextEvent.BLOCK, NextEvent.NULL_INVOICE);
+        final List<UUID> allEntitlements = entitlementApi.createBaseEntitlementsWithAddOns(account.getId(), entitlementWithAddOnsSpecifierList, true, Collections.emptyList(), callContext);
+        assertListenerStatus();
+
+        final Entitlement baseEntitlement = entitlementApi.getEntitlementForId(allEntitlements.get(0), false, callContext);
+        final Entitlement addOnEntitlement1 = entitlementApi.getEntitlementForId(allEntitlements.get(1), false, callContext);
+        final Entitlement addOnEntitlement2 = entitlementApi.getEntitlementForId(allEntitlements.get(2), false, callContext);
+        final Entitlement addOnEntitlement3 = entitlementApi.getEntitlementForId(allEntitlements.get(3), false, callContext);
+
+        busHandler.pushExpectedEvents(NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT);
+        clock.addMonths(1); //2025-04-30
+        assertListenerStatus();
+
+        final List<ExpectedInvoiceItemCheck> expectedInvoices = new ArrayList<ExpectedInvoiceItemCheck>();
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 3, 31), new LocalDate(2025, 4, 30), InvoiceItemType.RECURRING, new BigDecimal("20"))); //base
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 3, 31), new LocalDate(2025, 4, 30), InvoiceItemType.RECURRING, new BigDecimal("1.20"))); //ao1 recurring
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 3, 31), new LocalDate(2025, 4, 30), InvoiceItemType.RECURRING, new BigDecimal("5.91"))); //ao2 recurring
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 3, 31), new LocalDate(2025, 4, 30), InvoiceItemType.RECURRING, new BigDecimal("5.88"))); //ao3 recurring
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 3, 31), new LocalDate(2025, 4, 30), InvoiceItemType.USAGE, BigDecimal.ZERO)); //ao3 usage 0
+
+        Invoice invoice = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext).get(0);
+        invoiceChecker.checkInvoice(invoice.getId(), callContext, expectedInvoices);
+
+        //record usage for ao3 with date=2025-5-15
+        recordUsageData(addOnEntitlement3.getId(), "t1", "bullets", new LocalDate(2025, 5, 15), BigDecimal.valueOf(10L), callContext);
+
+        clock.addMonths(1); //2025-05-30
+        //add new addon on 2025-05-30
+        today = clock.getUTCToday();
+        busHandler.pushExpectedEvents(NextEvent.CREATE, NextEvent.BLOCK, NextEvent.INVOICE, NextEvent.PAYMENT, NextEvent.INVOICE_PAYMENT); //invoice generated here, this is unexpected
+        final EntitlementSpecifier addOnEntitlementSpecifier4 = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao4-in-arrear"), null, null, null, null);
+        UUID addon4EntId = entitlementApi.addEntitlement(baseEntitlement.getBundleId(), addOnEntitlementSpecifier4, today, today, false, Collections.emptyList(), callContext);
+        Entitlement addOnEntitlement4 = entitlementApi.getEntitlementForId(addon4EntId, false, callContext);
+        assertListenerStatus();
+        //this invoice is unexpected. Also, this invoice does not include usage item
+        expectedInvoices.clear();
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 4, 30), new LocalDate(2025, 5, 31), InvoiceItemType.RECURRING, new BigDecimal("20"))); //base recurring
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 4, 30), new LocalDate(2025, 5, 31), InvoiceItemType.RECURRING, new BigDecimal("1.20"))); //ao1 recurring
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 4, 30), new LocalDate(2025, 5, 31), InvoiceItemType.RECURRING, new BigDecimal("5.91"))); //ao2 recurring
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 4, 30), new LocalDate(2025, 5, 31), InvoiceItemType.RECURRING, new BigDecimal("5.88"))); //ao3 recurring
+        invoice = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext).get(1);
+        invoiceChecker.checkInvoice(invoice.getId(), callContext, expectedInvoices);
+
+        //schedule EOT upgrade for ao1, ao3, ao4 - no invoices as expected.
+        LocalDate changeDate = today.plusDays(1); //2025-05-31
+
+        //schedule plan change for ao1 - recurring price 1.22
+        planPhaseOverride = new DefaultPlanPhasePriceOverride("ao1-in-arrear-evergreen", Currency.USD, null, new BigDecimal(1.22), null);
+        EntitlementSpecifier aoSpec = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao1-in-arrear", PhaseType.EVERGREEN), null, null, null, List.of(planPhaseOverride));
+        addOnEntitlement1.changePlanWithDate(aoSpec, changeDate, Collections.emptyList(), callContext); //TODO - confirm here if they are specifying date or datetime
+
+        //schedule plan change for ao3 - recurring price 5.99, usage price 1.35
+        tieredBlockPriceOverride = new DefaultTieredBlockPriceOverride("bullets", BigDecimal.valueOf(1), BigDecimal.valueOf(1.25), Currency.USD, BigDecimal.valueOf(1000));
+        tierPriceOverride = new DefaultTierPriceOverride(List.of(tieredBlockPriceOverride));
+        usagePriceOverride = new DefaultUsagePriceOverride("bullets-usage-in-arrear-usage", UsageType.CONSUMABLE, List.of(tierPriceOverride));
+        planPhaseOverride = new DefaultPlanPhasePriceOverride("ao3-in-arrear-evergreen", Currency.USD, null, new BigDecimal(5.99), List.of(usagePriceOverride));
+        aoSpec = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao3-in-arrear", PhaseType.EVERGREEN), null, null, null, List.of(planPhaseOverride));
+        addOnEntitlement3.changePlanWithDate(aoSpec, changeDate, Collections.emptyList(), callContext);
+
+        //schedule plan change for ao4 - recurring price 4.36, usage price 1.40
+        tieredBlockPriceOverride = new DefaultTieredBlockPriceOverride("bullets", BigDecimal.valueOf(1), BigDecimal.valueOf(1.40), Currency.USD, BigDecimal.valueOf(1000));
+        tierPriceOverride = new DefaultTierPriceOverride(List.of(tieredBlockPriceOverride));
+        usagePriceOverride = new DefaultUsagePriceOverride("bullets-usage-in-arrear-usage", UsageType.CONSUMABLE, List.of(tierPriceOverride));
+        planPhaseOverride = new DefaultPlanPhasePriceOverride("ao4-in-arrear", Currency.USD, null, new BigDecimal(4.36), List.of(usagePriceOverride));
+        aoSpec = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao4-in-arrear", PhaseType.EVERGREEN), null, null, null, List.of(planPhaseOverride));
+        addOnEntitlement4.changePlanWithDate(aoSpec, changeDate, Collections.emptyList(), callContext);
+
+        //move to 2025-05-31 - invoice generated
+        busHandler.pushExpectedEvents(NextEvent.CHANGE, NextEvent.CHANGE, NextEvent.CHANGE, NextEvent.INVOICE, NextEvent.PAYMENT, NextEvent.INVOICE_PAYMENT, NextEvent.NULL_INVOICE, NextEvent.NULL_INVOICE, NextEvent.NULL_INVOICE);
+        clock.setDay(changeDate);
+        assertListenerStatus();
+
+        //Invoice generated for HP is different from test In case of HP, invoice has 6 items: ao4 recurring, ao4 usage, ao1 usage1 (2025-04-30 to 2025-5-30), ao1 usage2 (2025-05-30 to 2025-5-31), ao1 tax, base. I think base is generated because of the plan change to bring base to latest catalog. Since this is not done in our test, we don't have base item. Also, a4 items are probably generated in their case as they record usages corresponding to ao4.
+        expectedInvoices.clear();
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 5, 30), new LocalDate(2025, 5, 31), InvoiceItemType.RECURRING, new BigDecimal("0.07"))); //ao4 recurring
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 4, 30), new LocalDate(2025, 5, 31), InvoiceItemType.USAGE, new BigDecimal("10"))); //ao3 usage
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 5, 30), new LocalDate(2025, 5, 31), InvoiceItemType.USAGE, new BigDecimal("0"))); //ao4 usage
+        invoice = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext).get(2);
+        invoiceChecker.checkInvoice(invoice.getId(), callContext, expectedInvoices);
+    }
+
+    @Test(groups = "slow")
+    public void testCreateChangeWithPriceOverride10JuneSimplified() throws Exception {
+
+        LocalDate today = new LocalDate(2025, 3, 31);
+        clock.setDay(today);
+
+        final Account account = createAccountWithNonOsgiPaymentMethod(getAccountData(0));
+
+        // create subscription bundle with base, 1 addons - TODO - change this to ao3 as this plan has usage
+        final EntitlementSpecifier baseEntitlementSpecifier = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("standard-monthly-in-arrear"));
+        PlanPhasePriceOverride planPhaseOverride = new DefaultPlanPhasePriceOverride("ao1-in-arrear-evergreen", Currency.USD, null, new BigDecimal(1.20), null); //ao1 with 1.20 recurring price override
+        final EntitlementSpecifier addOnEntitlementSpecifier1 = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao1-in-arrear", PhaseType.EVERGREEN), null, null, null, List.of(planPhaseOverride));
+
+        //create subscription
+        final List<EntitlementSpecifier> specifierList = List.of(baseEntitlementSpecifier, addOnEntitlementSpecifier1);
+        final BaseEntitlementWithAddOnsSpecifier cartSpecifier = new DefaultBaseEntitlementWithAddOnsSpecifier(null, null, specifierList, null, null, false);
+        final List<BaseEntitlementWithAddOnsSpecifier> entitlementWithAddOnsSpecifierList = List.of(cartSpecifier);
+        busHandler.pushExpectedEvents(NextEvent.CREATE, NextEvent.CREATE, NextEvent.BLOCK, NextEvent.BLOCK, NextEvent.NULL_INVOICE);
+        final List<UUID> allEntitlements = entitlementApi.createBaseEntitlementsWithAddOns(account.getId(), entitlementWithAddOnsSpecifierList, true, Collections.emptyList(), callContext);
+        assertListenerStatus();
+
+        final Entitlement baseEntitlement = entitlementApi.getEntitlementForId(allEntitlements.get(0), false, callContext);
+        final Entitlement addOnEntitlement1 = entitlementApi.getEntitlementForId(allEntitlements.get(1), false, callContext);
+
+        busHandler.pushExpectedEvents(NextEvent.INVOICE, NextEvent.INVOICE_PAYMENT, NextEvent.PAYMENT);
+        clock.addMonths(1); //2025-04-30
+        assertListenerStatus();
+
+        //invoice generated as expected
+        final List<ExpectedInvoiceItemCheck> expectedInvoices = new ArrayList<ExpectedInvoiceItemCheck>();
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 3, 31), new LocalDate(2025, 4, 30), InvoiceItemType.RECURRING, new BigDecimal("20"))); //base
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 3, 31), new LocalDate(2025, 4, 30), InvoiceItemType.RECURRING, new BigDecimal("1.20"))); //ao1 recurring
+
+        Invoice invoice = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext).get(0);
+        invoiceChecker.checkInvoice(invoice.getId(), callContext, expectedInvoices);
+
+        //record usage for ao1 with date=2025-5-15
+        recordUsageData(addOnEntitlement1.getId(), "t1", "bullets", new LocalDate(2025, 5, 15), BigDecimal.valueOf(10L), callContext);
+
+        clock.addMonths(1); //2025-05-30
+        //add new addon on 2025-05-30
+        today = clock.getUTCToday();
+        busHandler.pushExpectedEvents(NextEvent.CREATE, NextEvent.BLOCK, NextEvent.INVOICE, NextEvent.PAYMENT, NextEvent.INVOICE_PAYMENT); //invoice generated here, this is unexpected
+        final EntitlementSpecifier addOnEntitlementSpecifier4 = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao4-in-arrear"), null, null, null, null);
+        UUID addon4EntId = entitlementApi.addEntitlement(baseEntitlement.getBundleId(), addOnEntitlementSpecifier4, today, today, false, Collections.emptyList(), callContext);
+        Entitlement addOnEntitlement4 = entitlementApi.getEntitlementForId(addon4EntId, false, callContext);
+        assertListenerStatus();
+        //this invoice is unexpected. Also, this invoice does not include usage item
+        expectedInvoices.clear();
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 4, 30), new LocalDate(2025, 5, 31), InvoiceItemType.RECURRING, new BigDecimal("20"))); //base recurring
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 4, 30), new LocalDate(2025, 5, 31), InvoiceItemType.RECURRING, new BigDecimal("1.20"))); //ao1 recurring
+        invoice = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext).get(1);
+        invoiceChecker.checkInvoice(invoice.getId(), callContext, expectedInvoices);
+
+        //schedule EOT upgrade for ao1
+        LocalDate changeDate = today.plusDays(1); //2025-05-31
+
+        //schedule plan change for ao1 - recurring price 1.22
+        planPhaseOverride = new DefaultPlanPhasePriceOverride("ao1-in-arrear-evergreen", Currency.USD, null, new BigDecimal(1.22), null);
+        EntitlementSpecifier aoSpec = new DefaultEntitlementSpecifier(new PlanPhaseSpecifier("ao1-in-arrear", PhaseType.EVERGREEN), null, null, null, List.of(planPhaseOverride));
+        addOnEntitlement1.changePlanWithDate(aoSpec, changeDate, Collections.emptyList(), callContext); //TODO - confirm here if they are specifying date or datetime
+
+        //move to 2025-05-31 - invoice generated
+        busHandler.pushExpectedEvents(NextEvent.CHANGE, NextEvent.INVOICE, NextEvent.PAYMENT, NextEvent.INVOICE_PAYMENT, NextEvent.NULL_INVOICE);
+        clock.setDay(changeDate);
+        assertListenerStatus();
+
+        expectedInvoices.clear();
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 5, 30), new LocalDate(2025, 5, 31), InvoiceItemType.RECURRING, new BigDecimal("0.07"))); //ao4 recurring
+//        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 4, 30), new LocalDate(2025, 5, 31), InvoiceItemType.USAGE, new BigDecimal("10"))); //ao1 usage
+        expectedInvoices.add(new ExpectedInvoiceItemCheck(new LocalDate(2025, 5, 30), new LocalDate(2025, 5, 31), InvoiceItemType.USAGE, new BigDecimal("0"))); //ao4 usage
+        invoice = invoiceUserApi.getInvoicesByAccount(account.getId(), false, false, true, callContext).get(2);
+        invoiceChecker.checkInvoice(invoice.getId(), callContext, expectedInvoices);
+    }
+
+
 
 
 }

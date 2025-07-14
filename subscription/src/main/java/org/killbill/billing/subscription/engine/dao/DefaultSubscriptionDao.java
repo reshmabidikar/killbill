@@ -355,6 +355,10 @@ public class DefaultSubscriptionDao extends EntityDaoBase<SubscriptionBundleMode
     public SubscriptionBase getSubscriptionFromId(final UUID subscriptionId, final SubscriptionCatalog kbCatalog, final boolean includeDeletedEvents, final InternalTenantContext context) throws CatalogApiException {
         final DefaultSubscriptionBase shellSubscription = transactionalSqlDao.execute(true, entitySqlDaoWrapperFactory -> {
             final SubscriptionModelDao subscriptionModel = entitySqlDaoWrapperFactory.become(SubscriptionSqlDao.class).getById(subscriptionId.toString(), context);
+            if(subscriptionModel == null) {
+                return null;
+            }
+
             final SubscriptionBundleModelDao bundleModel = entitySqlDaoWrapperFactory.become(BundleSqlDao.class).getById(subscriptionModel.getBundleId().toString(), context);
             return SubscriptionModelDao.toSubscription(subscriptionModel, bundleModel.getExternalKey());
         });
