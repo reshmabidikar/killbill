@@ -1278,7 +1278,7 @@ public class TestInvoice extends TestJaxrsBase {
         callbackServlet.pushExpectedEvents(ExtBusEventType.TENANT_CONFIG_CHANGE);
         //  There is an error with the following due to the issue reported in https://github.com/killbill/killbill/issues/1581, hence the tenantApi.insertUserKeyValue is used to upload the translation
         // invoiceApi.uploadInvoiceTranslation("en_GB", translations, requestOptions);
-        tenantApi.insertUserKeyValue("INVOICE_TRANSLATION_fr_", getResourceBodyString("org/killbill/billing/server/templates/InvoiceTranslations_fr.properties"), requestOptions);
+        tenantApi.insertUserKeyValue("INVOICE_TRANSLATION_fr", getResourceBodyString("org/killbill/billing/server/templates/InvoiceTranslations_fr.properties"), requestOptions);
 
         tenantApi.insertUserKeyValue(InvoiceBrandingTenantKey.COMPANY_INFO.name(), getResourceBodyString("org/killbill/billing/server/templates/companyInfo.json"), requestOptions);
         tenantApi.insertUserKeyValue(InvoiceBrandingTenantKey.INVOICE_TEMPLATE_BRAND_INFO.name(), getResourceBodyString("org/killbill/billing/server/templates/invoiceTemplateBrandInfo.json"), requestOptions);

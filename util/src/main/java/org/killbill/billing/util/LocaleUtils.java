@@ -44,9 +44,11 @@ public class LocaleUtils {
             }
         }
 
-        tmp.append(language)
-           .append("_")
-           .append(country);
+        tmp.append(language);
+        if(!country.isEmpty()) {
+           tmp.append("_")
+              .append(country);
+        }
         return tmp.toString();
     }
 
